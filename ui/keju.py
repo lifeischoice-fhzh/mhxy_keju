@@ -43,29 +43,24 @@ def build(app):
         body.pack(fill="both", expand=True)
         return outer, body
 
-    # ---- 题目对话框 ----
-    _, sec1 = card("题目对话框")
+    # ---- 客户端(自动定位,只读显示) ----
+    _, sec1 = card("客户端")
     app.region_vars = []
-    app.slot_btns = []
     slots = ttk.Frame(sec1)
     slots.pack(fill="x")
     slots.columnconfigure(0, weight=1, uniform="slot")
     slots.columnconfigure(1, weight=1, uniform="slot")
-    for i in range(4):
+    for i in range(core.MAX_CLIENTS):
         row, col = divmod(i, 2)
         box = tk.Frame(slots, bg="#f7f9fc", highlightbackground=BORDER,
                        highlightthickness=1)
         box.grid(row=row, column=col, sticky="ew",
                  padx=(0, 8) if col == 0 else (8, 0), pady=3)
-        app.slot_btns.append(ttk.Button(box, text=f"题目对话框{i + 1}",
-                           command=lambda i=i: app.on_pick_region(i)))
-        app.slot_btns[-1].pack(side="left", padx=(6, 6), pady=5)
-        var = tk.StringVar(value="未设置")
+        ttk.Label(box, text=f"客户端{i + 1}", style="Slot.TLabel").pack(
+            side="left", padx=(10, 6), pady=5)
+        var = tk.StringVar(value="未定位")
         ttk.Label(box, textvariable=var, style="Slot.TLabel").pack(
             side="left", fill="x", expand=True)
-        ttk.Button(box, text="✕", width=2, style="SlotClose.TButton",
-                   command=lambda i=i: app.on_clear_region(i)).pack(
-                       side="right", padx=(4, 6), pady=5)
         app.region_vars.append(var)
 
     bar = ttk.Frame(sec1)
@@ -77,7 +72,8 @@ def build(app):
                command=app.on_clear_regions).pack(side="left", padx=(8, 0))
     app.hint_label = ttk.Label(
         bar, style="Hint.TLabel",
-        text="框住完整题目对话框(含选项);最小分辨率效率最高")
+        text=(f"定位整个客户端窗口;最多 {core.MAX_CLIENTS} 个,"
+              "多出的舍弃;最小分辨率效率最高"))
     app.hint_label.pack(side="left", padx=(10, 0))
 
     mbar = ttk.Frame(sec1)
@@ -238,10 +234,9 @@ def draw_reward_items(app, items):
 
 
 def open_earn_detail(app):
-    """收益明细窗:每一轮的用时 / 银两 / 物品。"""
+    """收益明细窗:每一轮的用时 / 银两 / 物品。只建控件;刷新/关闭归 App。"""
     import tkinter as tk
     from tkinter import ttk
-    from tools import keju as tools_keju
 
     win = getattr(app, "earn_detail_win", None)
     if win is not None and win.winfo_exists():
@@ -264,22 +259,10 @@ def open_earn_detail(app):
                   font=("Microsoft YaHei UI", 10))
     txt.pack(fill="both", expand=True, padx=10, pady=(0, 10))
 
-    def refresh():
-        lines = tools_keju.reward_round_lines(
-            app.engine.keju_tool.ui_state()["rounds"])
-        txt.configure(state="normal")
-        txt.delete("1.0", "end")
-        txt.insert("1.0", "\n".join(lines) if lines
-                   else "还没有完成的轮次。\n"
-                        "(一轮 = 游戏里那句“恭喜你完成会试，共用时X分Y秒”)")
-        txt.configure(state="disabled")
-
-    def close():
-        ui_widgets.fade_out(win, then=win.destroy)
-
-    ttk.Button(bar, text="刷新", width=6, command=refresh).pack(side="right")
+    ttk.Button(bar, text="刷新", width=6,
+               command=app.on_earn_detail_refresh).pack(side="right")
     ttk.Button(bar, text="关闭", width=6,
-               command=close).pack(side="right", padx=(0, 6))
-    win.bind("<Escape>", lambda e: close())
+               command=app.on_earn_detail_close).pack(side="right", padx=(0, 6))
+    win.bind("<Escape>", lambda e: app.on_earn_detail_close())
     app.earn_detail_text = txt
-    refresh()
+    app.on_earn_detail_refresh()

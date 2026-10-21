@@ -3,7 +3,8 @@
 """梦幻西游 · 科举答题器(入口)
 
 逻辑拆分:
-- core.py 配置 / OCR / 语音 / 识别引擎调度 + CLI
+- core.py 配置 / OCR / 语音 / 识别引擎调度
+- cli.py  命令行(自检 / 统计 / 补题 / 音频预合成)
 - bank.py 题库子系统(读写/更新/匹配)
 - gui.py  单窗口应用的生命周期与按钮回调
 - ui/     窗口布局(keju / widgets)
@@ -15,7 +16,8 @@ import os
 import sys
 
 import bank                 # 题库子系统:更新题库与题库文件路径
-import core                 # 地基:配置/依赖检查/自检与统计(cmd_*)
+import cli                  # 命令行(cmd_*):自检/统计/补题/音频预合成
+import core                 # 地基:配置/依赖检查与数据文件(dpi_aware/ensure_data_files)
 from gui import App                 # 窗口入口
 
 
@@ -35,8 +37,8 @@ def _ensure_console():
 def main():
     ap = argparse.ArgumentParser(description="梦幻西游科举答题器")
     ap.add_argument("--selftest", action="store_true", help="OCR+匹配自检(合成图片)")
-    ap.add_argument("--seed", type=int, default=core.SELFTEST_SEED, metavar="N",
-                    help=f"自检抽题种子(默认 {core.SELFTEST_SEED},可复现;0=每次随机)")
+    ap.add_argument("--seed", type=int, default=cli.SELFTEST_SEED, metavar="N",
+                    help=f"自检抽题种子(默认 {cli.SELFTEST_SEED},可复现;0=每次随机)")
     ap.add_argument("--tts-test", action="store_true", help="语音播报测试")
     ap.add_argument("--build-voice-cache", type=int, nargs="?", const=0, default=None,
                     metavar="N", help="预合成答案音频到本地缓存(不带N=全部,如 200=前200条)")
@@ -67,9 +69,9 @@ def main():
         return 1
 
     if args.selftest:
-        return core.cmd_selftest(args.seed)
+        return cli.cmd_selftest(args.seed)
     if args.tts_test:
-        return core.cmd_tts_test()
+        return cli.cmd_tts_test()
     if args.update_bank:
         try:
             _, msg = bank.update_bank()
@@ -79,15 +81,15 @@ def main():
             print(f"更新失败: {e}")
             return 1
     if args.stats:
-        return core.cmd_stats(args.since)
+        return cli.cmd_stats(args.since)
     if args.rewards:
-        return core.cmd_rewards()
+        return cli.cmd_rewards()
     if args.uncollected is not None:
-        return core.cmd_uncollected(args.uncollected)
+        return cli.cmd_uncollected(args.uncollected)
     if args.build_voice_cache is not None:
-        return core.cmd_build_voice_cache(args.build_voice_cache)
+        return cli.cmd_build_voice_cache(args.build_voice_cache)
 
-    core._dpi_aware()
+    core.dpi_aware()
     App().run()
     return 0
 

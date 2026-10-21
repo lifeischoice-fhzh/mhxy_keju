@@ -30,6 +30,7 @@ KEEP_FILES = (
     "config.json",
     "data/rewards.json",
     "data/uncollected.jsonl",
+    "data/events.jsonl",
     "data/keju_questions.backup.json",
 )
 KEEP_GLOBS = ("keju.log*",)

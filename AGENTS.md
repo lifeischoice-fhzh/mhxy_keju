@@ -17,6 +17,11 @@ keju.log          # 格式 [HH:MM:SS][模块]内容,按天轮转 .old
 
 # 命令行
 python keju.py --selftest / --rewards / --stats / --uncollected / --update-bank
+
+# 回归测试(自 keju-answerer 移植;降妖伏魔两组已随功能裁掉)
+python tests.py            # 全量(含界面/引擎慢用例,约 1~2 分钟)
+python tests.py --fast     # 快速模式:只跑代表用例,改完代码自检用
+python tests.py --only gui # 只跑某几组(名字带不带 sec_ 都行)
 ```
 
 **注意**:Bash 工具走 Git Bash,Windows 原生命令的参数要写双斜杠(`taskkill //F //IM`)。
@@ -25,17 +30,25 @@ python keju.py --selftest / --rewards / --stats / --uncollected / --update-bank
 
 ```
 入口  keju.py        ~100 行  argparse + 命令行分支
-界面  gui.py          ~560 行  App:单窗口生命周期 + 按钮回调 + 引擎看门狗
-布局  ui/keju.py      ~290 行  主窗/迷你窗纯布局 + 收益明细窗;ui/widgets.py 主题/摆位/动效
-逻辑  tools/keju.py  ~1160 行  KejuTool:自己的线程/状态/循环(识别、收益统计)
-数据  bank.py         ~400 行  题库子系统(QuestionBank + 官方源更新)
-地基  core.py        ~1630 行  配置 / OCR / 截图 / 语音 / 窗口枚举 / Engine 调度 + CLI
+命令行 cli.py        ~650 行  cmd_*(自检/统计/补题/收益/音频预合成;自检夹具也在这)
+界面  gui.py          ~660 行  App:单窗口生命周期 + 按钮回调 + 引擎看门狗
+布局  ui/keju.py      ~280 行  主窗/迷你窗纯布局 + 收益明细窗;ui/widgets.py 主题/摆位/动效
+逻辑  tools/keju.py  ~1200 行  KejuTool:自己的线程/状态/循环(识别、收益统计、事件落盘)
+数据  bank.py         ~430 行  题库子系统(QuestionBank + 官方源更新)
+地基  core.py        ~1030 行  配置 / OCR / 截图 / 语音 / 窗口枚举 / Engine 调度
+测试  tests.py       ~3370 行  回归测试(patch/Sandbox 全离线;9 组 + 2 组分支补漏)
 ```
 
 - `gui.App` 持有 `self.engine`(`core.Engine`),`Engine` 只挂 `keju_tool` 一条工具线程
-- 启动即 `App.__init__`:建窗 → 弹出 → 起 Speaker/Engine → 无区域就自动定位
+- 启动即 `App.__init__`:建窗 → 弹出 → 起 Speaker/Engine → **无条件自动定位客户端**
+- 定位只有自动一条路(手动框选已删,2026-10-21):整窗口填槽,最多 `core.MAX_CLIENTS`(5)
+  个客户端,多出的舍弃;客户端挪窝由 `KejuTool._follow_clients` 自动跟随
 - 引擎的启停只看 `keju_tool.watching`(自动监听开关);没有 active_tool 那套功能切换
 - 配置分区:`config.json` 顶层只有 `app` / `keju` 两段(源项目还有 bell 段,已删)
+- 识别事件:match/nomatch/blind/dup/low/mode/boot 逐条落 `data/events.jsonl`
+  (`tools_keju.record_event`),`cli.cmd_stats` 首选读它,没有才回退解析 keju.log
+  —— 日志文案怎么改都断不了统计;新增事件 kind 要同步 cmd_stats。
+  启动时 `core.prune_events()` 清掉非当天的行:统计只看当天,文件不会无限涨
 
 ## 从源项目(keju-answerer)带过来的约定
 
@@ -48,6 +61,7 @@ python keju.py --selftest / --rewards / --stats / --uncollected / --update-bank
 - 红线沿用:`tools/`、`bank.py` 模块级不许 `import core`(只能在方法内);
   `ui/` 只建控件不写行为(回调指向 `app.on_xxx`)
 - `self._stop` 不能覆盖 `threading.Thread._stop()`:工具线程的停止事件叫 `_halt`
+- tests.py 是回归门禁:全离线(数据/配置/日志全指临时目录);新增用例别碰真机 —— 机器上可能正开着游戏,跑 cycle 的用例要么用 `mk_engine`(已把 `_auto_boxes` 置空),要么把 `find_client_windows` 桩掉,不然 `_follow_clients` 会把假区域"跟随"到真客户端上
 
 ## 打包
 

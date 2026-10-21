@@ -206,7 +206,7 @@ def local_meta() -> dict:
     return _local_meta()
 
 
-def _load_bank_raw() -> list:
+def load_bank_raw() -> list:
     """读题库原始记录(没文件就读到空表)。"""
     try:
         with open(BANK_PATH, encoding="utf-8") as f:
@@ -261,7 +261,7 @@ def update_bank():
             errors.append(f"镜像源失败({e2})")
             raise ValueError("; ".join(errors)) from e2
 
-    old_entries = _load_bank_raw()
+    old_entries = load_bank_raw()
     merged, added, kept = merge_bank_entries(old_entries, entries)
     sha = _bank_content_sha(merged)
     meta["content_sha"] = sha
@@ -343,6 +343,23 @@ class QuestionBank:
         if best_score < threshold:
             return None, best_score
         return best_entry, best_score
+
+    def prefilter(self, q_norm: str, cutoff: float):
+        """滑窗找题的单指标低成本预筛:fuzz.ratio 快速排除明显不沾边的窗口。
+
+        返回 (score, entry) 或 None。通过预筛的仍要走 match() 三指标精匹配,
+        这里只负责把"肯定到不了阈值"的窗口挡在门外(整窗几百个窗口时省大头)。
+        q_norm 传归一化后的文本(调用方在滑窗里已经算过,不在这里重复算)。
+        """
+        from rapidfuzz import fuzz, process
+
+        if not q_norm or not self.entries:
+            return None
+        r = process.extractOne(q_norm, self._norms, scorer=fuzz.ratio,
+                               score_cutoff=int(cutoff))
+        if not r:
+            return None
+        return r[1], self.entries[r[2]]
 
     def match_all(self, text: str, threshold: float, top_k: int = 6):
         """返回 [(entry, score)] 按相似度降序,含并列候选(用于选项消歧)。"""

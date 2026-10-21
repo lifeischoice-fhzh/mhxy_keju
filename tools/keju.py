@@ -97,7 +97,6 @@ def fullscan_find(bank, blocks: list, threshold: float,
     win 为命中窗口的文本块下标列表。
     """
     import core
-    from rapidfuzz import fuzz, process
 
     hits: dict[int, tuple] = {}
     best_any = None  # (score, entry, text):即使低于阈值也记录,便于诊断
@@ -124,16 +123,15 @@ def fullscan_find(bank, blocks: list, threshold: float,
             text = "".join(b["text"] for b in blocks[i:i + size])
             if len(core.normalize(text)) >= MIN_QUESTION_CHARS:
                 windows.append((i, size, text))
-    for i, size, text in windows[:600]:
+    for i, size, text in windows[:MAX_SCAN_WINDOWS]:
         q = core.normalize(text)
         # 先用单指标低成本预筛,通过后再三指标精匹配
-        pre = process.extractOne(q, bank._norms, scorer=fuzz.ratio,
-                                 score_cutoff=int(threshold) - 15)
-        if not pre:
+        pre = bank.prefilter(q, int(threshold) - 15)
+        if pre is None:
             continue
-        _, pre_score, pre_idx = pre
+        pre_score, pre_entry = pre
         if best_any is None or pre_score > best_any[0]:
-            best_any = (pre_score, bank.entries[pre_idx], text)
+            best_any = (pre_score, pre_entry, text)
         entry, score = bank.match(text, threshold)
         if entry is None:
             continue
@@ -240,6 +238,23 @@ def is_exam_prompt(text: str) -> bool:
 _UNCOLLECTED_SEEN: set = set()    # 本次运行已记录过的读法,避免刷同一个文件
 
 
+def record_event(kind: str, **fields) -> None:
+    """把一条识别事件追加进 data/events.jsonl(--stats 的首选数据源)。
+
+    事件只认 kind + 字段,不掺日志措辞 —— 日志文案怎么改都断不了统计。
+    写失败(磁盘满/被占用)静默:统计是副产品,绝不能拖住识别线程。
+    """
+    import core
+    row = {"ts": time.strftime("%Y-%m-%d %H:%M:%S"), "kind": kind}
+    row.update(fields)
+    try:
+        os.makedirs(os.path.dirname(core.EVENTS_PATH), exist_ok=True)
+        with open(core.EVENTS_PATH, "a", encoding="utf-8") as f:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
 def note_uncollected(bank, text: str, options: str = "") -> str:
     """读到像题目、但分数到不了下限时调用。
 
@@ -263,6 +278,7 @@ def note_uncollected(bank, text: str, options: str = "") -> str:
         return ""
     tip = (f"低置信 {score:.0f}%(不到 {MIN_MATCH_PCT}% 不播报,疑似题库未收录): "
            f"{text[:30]}…")
+    record_event("low", score=round(score), text=text[:80])
     if norm not in _UNCOLLECTED_SEEN:
         _UNCOLLECTED_SEEN.add(norm)
         if len(_UNCOLLECTED_SEEN) > 500:
@@ -293,7 +309,7 @@ def add_manual_question(question: str, answer: str,
     question, answer = question.strip(), answer.strip()
     if not question or not answer:
         return False
-    raw = bank._load_bank_raw()
+    raw = bank.load_bank_raw()
     key = (core.normalize(question), answer)
     for it in raw:
         if (core.normalize(it.get("question") or ""),
@@ -317,6 +333,11 @@ def add_manual_question(question: str, answer: str,
 
 # 当天答题收益(银两/经验/物品)按天累计,跨启动保留
 REWARD_PATH = os.path.join(BASE_DIR, "data", "rewards.json")
+
+# 滑窗匹配的窗口数上限:只防极端花屏把单次扫描拖成秒级。普通整窗 OCR 只有
+# 几十个块,远到不了这里;预筛是单指标,但窗口数真到 3000 时也会到数百毫秒级。
+# 600 的旧上限曾在 300+ 块干扰的屏幕上静默截断,把屏幕下方的真题漏掉。
+MAX_SCAN_WINDOWS = 3000
 
 # ---- 奖励提示的识别(文案取自真实日志) ----
 #   "你得到了66580点经验，6831两银子"
@@ -474,7 +495,7 @@ class RewardTally:
     def feed(self, blocks, slot=1) -> list[str]:
         """喂一轮 OCR 结果,返回本帧新计入的说明(给日志/界面用)。
 
-        slot: 这条画面属于哪个客户端(槽位号 1~4)。多开时每个客户端各算各的
+        slot: 这条画面属于哪个客户端(槽位号 1~5)。多开时每个客户端各算各的
         "单轮收益",互不串账;落轮提示("共用时X分Y秒")也只结自己这一轮的账。
         整段进锁:界面同时在读 summary/round_lines,不能读到写了一半的状态。
         """
@@ -486,7 +507,7 @@ class RewardTally:
         found = scan_rewards(blocks)
         now = time.time()
         news = []
-        rk = str(slot)                   # 槽位号:1~4,多开各算各的
+        rk = str(slot)                   # 槽位号:1~5,多开各算各的
         cur = self._cur.setdefault(rk, {"exp": 0, "silver": 0, "items": {}})
         for v, n in found["exp"].items():
             grew = self._acc(f"{rk}|exp:{v}", n, now)
@@ -632,7 +653,10 @@ class KejuTool(threading.Thread):
         self._last_announce_ts = 0.0   # 最近一次播报时刻(自适应轮询用)
         # 显式传路径:REWARD_PATH 在测试里会被指到临时目录
         self.rewards = RewardTally(REWARD_PATH)  # 当天收益
-        self._auto_boxes = None        # "自动定位"当时记下的客户端矩形
+        # "自动定位"当时记下的客户端矩形(引擎重建会造新工具:从配置把当前
+        # 区域接过来,自动跟随不断线)
+        boxes = [list(r) for r in (self.cfg("regions") or []) if r]
+        self._auto_boxes = boxes or None
         self._follow_ts = 0.0          # 上次检查客户端有没有挪窝
         self._manual_fs = False        # 这一次全屏扫描是不是手动按的
         self._req_cycle = False        # 有待办:手动识别(界面按的)
@@ -789,7 +813,7 @@ class KejuTool(threading.Thread):
     def fullscan(self):
         """全屏扫描:找题播报。不改动任何区域设置。找不到自动重试一次。
 
-        重试前的那 1 秒不白等:先扫一遍已框的区域(手动扫描期间新弹的题不会漏)。
+        重试前的那 1 秒不白等:先扫一遍已定位的区域(手动扫描期间新弹的题不会漏)。
         """
         manual = bool(getattr(self, "_manual_fs", False))
         n = self._fullscan_once()
@@ -847,7 +871,13 @@ class KejuTool(threading.Thread):
             # 只约束自动轮询防止连播;手动按的扫描就是要重听
             self.app.log(f"[全屏扫描]该题 {REPEAT_GUARD_S} 秒内已播报过,"
                          "跳过(再点一次可重听)")
+            record_event("dup")
             return 1
+        # 真播报了才记 match:重复抑制那次只算 dup,别让 --stats 两头各记一笔
+        record_event("match", score=round(score), note=note.strip(),
+                     answer=entry["a"], response=round(elapsed, 2),
+                     ocr=round(_t_ocr, 2), match=round(_t_match, 2),
+                     manual=manual)
         self._remember_answered(entry)
         self.app.last_answer = entry["a"]
         self.app.speaker.say(entry["a"])
@@ -938,7 +968,7 @@ class KejuTool(threading.Thread):
         # 客户端挪窝了就先把区域跟过去,再按区域截图
         self._follow_clients()
 
-        # 带槽位号(1~4):奖励统计要按客户端分开归轮
+        # 带槽位号(1~5):奖励统计要按客户端分开归轮
         regions = [(i + 1, r) for i, r in
                    enumerate(self.cfg("regions") or []) if r]
         if not regions:
@@ -946,10 +976,10 @@ class KejuTool(threading.Thread):
             # 提示一次并暂停自动监听,免得"看着在监听、其实每轮都在全屏扫"
             self._no_region_streak += 1
             if force or self._no_region_streak == 1:
-                olog("还没有题目对话框 —— 请先框选,或点「自动定位客户端」")
+                olog("还没有定位到客户端 —— 启动游戏后点「自动定位客户端」")
             if self.watching:
                 self.watching = False
-                olog("没有题目对话框,已暂停(框好后重新点「自动监听」)")
+                olog("没有定位到客户端,已暂停(定位后重新点「自动监听」)")
             return
         self._no_region_streak = 0
         found_text = False
@@ -1040,6 +1070,7 @@ class KejuTool(threading.Thread):
                         and time.time() - t_ans < REPEAT_GUARD_S):
                     olog(f"该题 {REPEAT_GUARD_S} 秒内已播过,不重复: "
                                  f"{entry['q'][:16]}…")
+                    record_event("dup")
                     continue
                 self._remember_answered(entry)
                 self.app.last_answer = entry["a"]
@@ -1050,6 +1081,10 @@ class KejuTool(threading.Thread):
                      f"{entry['q'][:16]}… 【{entry['a']}】"
                      f"| 响应 {_t_resp:.2f}s",
                      detail=f" (OCR {_t_ocr:.2f}s 匹配 {_t_match:.2f}s)")
+                record_event("match", score=round(score), note=note.strip(),
+                             answer=entry["a"], response=round(_t_resp, 2),
+                             ocr=round(_t_ocr, 2), match=round(_t_match, 2),
+                             manual=bool(force))
                 self.app.speaker.say(entry["a"])
                 self._last_announce_ts = time.time()
                 self._record_stat(_t_resp)
@@ -1061,6 +1096,8 @@ class KejuTool(threading.Thread):
                 # 没答出的这一刻才算一次"最接近的候选":分数接近=真题没收录
                 # (值得补题库),分数很低=屏幕上根本不是题(聊天/任务栏)
                 self._nomatch_near = self.app.bank.closest(bare)
+                record_event("nomatch", score=round(self._nomatch_near),
+                             text=bare[:80])
             if (force or self._nomatch_streak == 1
                     or self._nomatch_streak % 10 == 0):
                 suffix = (f"(连续{self._nomatch_streak}次)"
@@ -1075,7 +1112,9 @@ class KejuTool(threading.Thread):
                                        self._leftover_text(rblocks, qwin))
                 if tip:
                     olog(tip)
-            return
+            # 这个客户端的题没答出:看下一个客户端(多开时一个区域没匹配
+            # 不该挡住同轮其余客户端,否则它们的题要白等一轮)
+            continue
         if not found_text:
             self._miss_streak += 1
             if force or self._miss_streak == 1 or self._miss_streak % 15 == 0:
@@ -1083,36 +1122,36 @@ class KejuTool(threading.Thread):
                           if self._miss_streak > 1 else "")
                 olog("题目对话框里没读到文字(题目未出现)"
                      + suffix, ui=force)
+            if self._miss_streak == 1:
+                record_event("blind")
         else:
             self._miss_streak = 0
 
     def _follow_clients(self):
-        """客户端被挪动/换了分辨率:"自动定位"来的区域跟着更新。
+        """客户端被挪动/换了分辨率:自动定位来的区域跟着更新。
 
-        每秒最多查一次窗口;手动框过的(regions_auto 关着)一律不动,
-        客户端数量变了也不动 —— 免得某个窗口最小化就把别人的区域弄丢。
+        每秒最多查一次窗口;客户端最小化/关掉会让数量变化,那时宁可不跟,
+        免得把别的槽位弄丢。
         """
         import core
         now = time.time()
         if now - getattr(self, "_follow_ts", 0.0) < 1.0:
             return
         self._follow_ts = now
-        mine = self.app.cfg.setdefault("keju", {})
-        if not mine.get("regions_auto") or not getattr(self, "_auto_boxes", None):
+        if not getattr(self, "_auto_boxes", None):
             return
         try:
             found, _minimized = core.find_client_windows()
         except Exception:
             return
-        boxes = [[int(v) for v in b] for _t, b in found[:4]]
+        boxes = [[int(v) for v in b] for _t, b in found[:core.MAX_CLIENTS]]
         if boxes == self._auto_boxes:
             return
-        if not core.can_follow_clients(boxes, self._auto_boxes,
-                                  mine.get("regions")):
-            mine["regions_auto"] = False       # 区域被手动改过,不再跟随
+        if not core.can_follow_clients(boxes, self._auto_boxes):
             return
         self._auto_boxes = boxes
-        mine["regions"] = boxes + [None] * (4 - len(boxes))
+        mine = self.app.cfg.setdefault("keju", {})
+        mine["regions"] = boxes + [None] * (core.MAX_CLIENTS - len(boxes))
         self.forget_region_memory()            # 位置变了,旧的画面/题目记忆全作废
         self.app.log(f"[客户端]{len(boxes)} 个客户端位置变了,已自动跟随")
 

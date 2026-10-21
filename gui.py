@@ -10,7 +10,7 @@ from tools import keju as tools_keju   # 收益文案(纯函数,只读)
 from ui import keju as ui_keju
 from ui.keju import (MINI_FONT, MINI_FONT_MIN, MINI_LABEL_MAX_W,
                      MINI_MARGIN, MINI_TOP)
-from ui.widgets import pick_region, pop_in, stop_anim
+from ui.widgets import fade_out, pop_in, stop_anim
 
 
 ENGINE_RESTART_MAX = 3    # 看门狗连续重建上限:到顶就停手,别每 10 秒重建一次刷日志
@@ -66,7 +66,14 @@ class App:
                     os.replace(core.LOG_PATH, core.LOG_PATH + ".old")
         except Exception:
             pass
+        try:
+            n = core.prune_events()    # 事件只留当天:统计口径与收益一致
+            if n:
+                self.log(f"[事件]已清掉 {n} 条非当天的识别记录", ui=False)
+        except Exception:
+            pass
         self.log(f"[应用]启动 · 题库 {len(self.bank)} 题")
+        tools_keju.record_event("boot")     # --stats 的分模式段从这里切开
         try:
             n = core.prune_voice_cache(self.cfg, self.bank)
             if n:
@@ -94,21 +101,10 @@ class App:
         self.log("[应用]就绪 —— 打开「自动监听」开始答题")
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         self.root.after(POLL_MS, self._drain_logs)
-        # 卡槽是空的才定位;已经有区域就留着(客户端挪了由自动跟随处理)
-        if not [r for r in (self._get("regions") or []) if r]:
-            self.on_autolocate()
+        # 启动即自动定位:坐标不留在配置里,每次启动都按当前窗口重新找
+        self.on_autolocate()
 
     # ---- 界面回调 ----
-    def on_pick_region(self, idx):
-        region = pick_region(self.root)
-        if region:
-            self._get("regions")[idx] = [int(v) for v in region]
-            self._set("regions_auto", False)     # 手动框过:区域不再跟着客户端跑
-            core.save_config(self.cfg)
-            self._refresh_regions()
-            self.log(f"[题目对话框{idx + 1}]设置"
-                     f"[({region[0]},{region[1]})-({region[2]},{region[3]})]")
-
     def _refresh_watch_btn(self):
         """监听按钮文案/高亮跟引擎状态走(按钮可能已销毁,异常都兜住)。"""
         on = bool(getattr(self.engine.keju_tool, "watching", False))
@@ -138,24 +134,16 @@ class App:
         core.save_config(self.cfg)
         self._refresh_mode_btn()
         self.log(f"[识别模式]{'御前科举' if keju else '三大学士'}")
+        tools_keju.record_event("mode", mode="御前科举" if keju else "三大学士")
 
     def _refresh_regions(self):
-        """刷新 4 行区域坐标显示(与左侧按钮逐行对齐)。"""
-        regions = (self._get("regions") or []) + [None] * 4
-        for i in range(4):
+        """刷新各客户端槽位的坐标显示。"""
+        regions = ((self._get("regions") or [])
+                   + [None] * core.MAX_CLIENTS)
+        for i in range(core.MAX_CLIENTS):
             r = regions[i]
             self.region_vars[i].set(
-                f"({r[0]},{r[1]})-({r[2]},{r[3]})" if r else "未设置")
-
-    def on_clear_region(self, idx):
-        """清除单个题目对话框,并清掉它的画面/题目记忆。"""
-        old = (self._get("regions") or [None] * 4)[idx]
-        self._get("regions")[idx] = None
-        if old:
-            self.engine.keju_tool.forget_region_memory(tuple(old))
-        core.save_config(self.cfg)
-        self._refresh_regions()
-        self.log(f"[题目对话框{idx + 1}]清除")
+                f"({r[0]},{r[1]})-({r[2]},{r[3]})" if r else "未定位")
 
     def on_reset_stats(self):
         self.engine.keju_tool.reset_stats()
@@ -164,6 +152,35 @@ class App:
     def on_earn_detail(self):
         """收益明细:每一轮的用时/银两/物品(窗口在 ui/keju)。"""
         ui_keju.open_earn_detail(self)
+
+    def on_earn_detail_refresh(self):
+        """收益明细窗的内容:每轮一行(没数据给空态提示)。
+
+        ui/keju 只建控件;读状态、填文本是行为,归 App(红线)。
+        """
+        try:
+            rounds = self.engine.keju_tool.ui_state()["rounds"]
+        except Exception:
+            rounds = []                  # 状态口不在:窗开着但内容空,不拖垮刷新
+        lines = tools_keju.reward_round_lines(rounds)
+        txt = getattr(self, "earn_detail_text", None)
+        if txt is None:
+            return
+        try:
+            txt.configure(state="normal")
+            txt.delete("1.0", "end")
+            txt.insert("1.0", "\n".join(lines) if lines
+                       else "还没有完成的轮次。\n"
+                            "(一轮 = 游戏里那句“恭喜你完成会试，共用时X分Y秒”)")
+            txt.configure(state="disabled")
+        except Exception:
+            pass
+
+    def on_earn_detail_close(self):
+        """明细窗关闭:跑完淡出再销毁(和别的窗口一个动效)。"""
+        win = getattr(self, "earn_detail_win", None)
+        if win is not None and win.winfo_exists():
+            fade_out(win, then=win.destroy)
 
     def on_toggle_mute(self):
         self._set("mute", not bool(self._get("mute")))
@@ -192,52 +209,53 @@ class App:
     def on_autolocate(self):
         """按窗口枚举,把每个梦幻西游客户端"整窗口"填成一条题目对话框区域。
 
-        整窗口覆盖=永不因框错而漏;窗口移动/换分辨率/多开位置不同都能一次到位。
+        整窗口覆盖=不漏对话框;窗口移动/换分辨率/多开位置不同都能一次到位。
         (实测:整窗口 640x480 档 OCR 中位 0.30s,与只框对话框持平)
         每次都会先把旧坐标全部清掉:客户端挪过位置后,旧坐标只会误导。
+        最多定位 core.MAX_CLIENTS 个客户端,多出的舍弃。
         """
         self._clear_all_regions()          # 先无条件清空,再重新填
         try:
             wins, minimized = core.find_client_windows()
         except Exception as e:
             core.save_config(self.cfg)
-            self.log(f"[题目对话框]自动定位失败: {e}")
+            self.log(f"[客户端]自动定位失败: {e}")
             return
         for t in minimized:
-            self.log(f"[题目对话框]客户端已最小化,跳过(截不到画面): {t}")
+            self.log(f"[客户端]客户端已最小化,跳过(截不到画面): {t}")
         if not wins:
             core.save_config(self.cfg)
             if minimized:      # 最小化时截不到画面,得让用户把窗口显示出来
-                self.log("[题目对话框]客户端是最小化的,定位不到 —— "
+                self.log("[客户端]客户端是最小化的,定位不到 —— "
                          "把游戏窗口显示出来,再点一次「自动定位客户端」")
             else:
-                self.log("[题目对话框]没找到梦幻西游客户端窗口:"
-                         "确认游戏已启动;也可以手动框选")
+                self.log("[客户端]没找到梦幻西游客户端窗口:"
+                         "确认游戏已启动,再点一次「自动定位客户端」")
             return
         self._set("regions", [])
         regs = self._get("regions")
-        for _title, box in wins[:4]:
+        for _title, box in wins[:core.MAX_CLIENTS]:
             regs.append([int(v) for v in box])
-        while len(regs) < 4:
+        while len(regs) < core.MAX_CLIENTS:
             regs.append(None)
-        self._set("regions_auto", True)          # 标记:这些区域是自动定位来的
         self.engine.keju_tool.set_auto_boxes([r for r in regs if r])
         core.save_config(self.cfg)
         self._refresh_regions()
-        for i, (_title, box) in enumerate(wins[:4]):
+        for i, (_title, box) in enumerate(wins[:core.MAX_CLIENTS]):
             size, _is_min = core.client_size_info(box)
-            self.log(f"[题目对话框{i + 1}]整个客户端 "
+            self.log(f"[客户端{i + 1}]整个客户端 "
                      f"({box[0]},{box[1]})-({box[2]},{box[3]}) {size}")
-        extra = (f";槽位只有 4 个,多出的 {len(wins) - 4} 个没填"
-                 if len(wins) > 4 else "")
-        self.log(f"[题目对话框]发现 {len(wins)} 个客户端,已按整个客户端定位{extra}")
-        sizes = [core.client_size_info(w[1]) for w in wins[:4]]
+        n_set = len([r for r in regs if r])
+        extra = (f";最多支持 {core.MAX_CLIENTS} 个,"
+                 f"多出的 {len(wins) - n_set} 个舍弃"
+                 if len(wins) > core.MAX_CLIENTS else "")
+        self.log(f"[客户端]发现 {len(wins)} 个客户端,已定位 {n_set} 个{extra}")
+        sizes = [core.client_size_info(w[1]) for w in wins[:core.MAX_CLIENTS]]
         if any(not min_ok for _t, min_ok in sizes):
             self.log(f"[提示]不是最小分辨率 —— 游戏分辨率调成 "
                      f"{core.MIN_GAME_RES[0]}×{core.MIN_GAME_RES[1]} 效果最佳"
                      "(截图更快、字也清楚)")
-        self.log("[提示]挪动客户端或改了分辨率后,会自动跟随;"
-                 "手动框过就不再跟随")
+        self.log("[提示]挪动客户端或改了分辨率后,会自动跟随")
         if not bool(self._get("exam_mode", True)):
             self.log("[提示]整窗口区域在「三大学士」模式下噪声大,"
                      "建议切「御前科举」模式")
@@ -247,16 +265,16 @@ class App:
         self.engine.keju_tool.forget_region_memory()
 
     def _clear_all_regions(self):
-        """清空 4 个题目对话框坐标 + 对应的画面/题目记忆(不落盘、不记日志)。"""
-        self._set("regions", [None] * 4)
-        self._set("regions_auto", False)          # 清空了就不再跟随客户端
+        """清空全部客户端坐标 + 对应的画面/题目记忆(不落盘、不记日志)。"""
+        self._set("regions", [None] * core.MAX_CLIENTS)
+        self.engine.keju_tool.set_auto_boxes(None)   # 清空了就不再跟随客户端
         self._forget_region_memory()
         self._refresh_regions()
 
     def on_clear_regions(self):
         self._clear_all_regions()
         core.save_config(self.cfg)
-        self.log("[题目对话框]全部清除")
+        self.log("[客户端]全部清除")
 
     def on_toggle_watch(self):
         self._engine_bad = 0        # 用户重新点「自动监听」= 重新给看门狗机会重建
@@ -424,6 +442,24 @@ class App:
         except Exception:
             pass
 
+    def _note_broken(self, key, err):
+        """刷新链里某个兜底分支第一次失败时记进日志(同类失败只记一次)。
+
+        这些分支静默是为了"刷新链不能断"(界面还能用);但完全无声的话,
+        坏了没人知道 —— 首错记一条进文件,后面同类失败不再重复。
+        """
+        seen = getattr(self, "_broken_seen", None)
+        if seen is None:
+            seen = self._broken_seen = set()
+        if key in seen:
+            return
+        seen.add(key)
+        try:
+            self.log(f"[界面]刷新项「{key}」失败(同类失败不再记): "
+                     f"{type(err).__name__}: {err}", ui=False)
+        except Exception:
+            pass
+
     def _drain_logs(self):
         # 这一趟的几步各自兜一层:这个方法是 `after` 自排自的整条界面刷新链的
         # 入口,只要有一次异常漏出去,链就断了 —— 窗口还能拖、引擎还在扫,
@@ -449,8 +485,8 @@ class App:
                 self.log_box.insert("end", f"[{stamp}]{msg}\n", tag)
                 self.log_box.see("end")
                 self.log_box.configure(state="disabled")
-        except Exception:
-            pass
+        except Exception as e:
+            self._note_broken("日志落屏", e)
         # 迷你窗显示最近答案(单行大号字;过长自动缩字号)
         try:
             if getattr(self, "mini", None) and self.mini.winfo_exists():
@@ -471,12 +507,13 @@ class App:
                             font=("Microsoft YaHei", size, "bold"))
                         self.root.update_idletasks()
                     self._anchor_mini()
-        except Exception:
-            pass
+        except Exception as e:
+            self._note_broken("迷你窗", e)
         # 本局统计 + 今日收益刷新:只认工具的只读状态口(ui_state)
         try:
             st = self.engine.keju_tool.ui_state()
-        except Exception:
+        except Exception as e:
+            self._note_broken("本局统计", e)
             st = None                  # 状态口不在/坏了:这一拍就不动界面
         if st is not None:
             try:
@@ -488,8 +525,8 @@ class App:
                        + (f" · 未匹配 {um}" if um else ""))
                 if self.round_var.get() != txt:
                     self.round_var.set(txt)
-            except Exception:
-                pass
+            except Exception as e:
+                self._note_broken("本局统计行", e)
             try:
                 txt = tools_keju.reward_earn_text(st.get("silver"))
                 if self.reward_var.get() != txt:
@@ -499,8 +536,8 @@ class App:
                 if sig != getattr(self, "_earn_sig", None):
                     self._earn_sig = sig
                     ui_keju.draw_reward_items(self, st.get("items") or [])
-            except Exception:
-                pass
+            except Exception as e:
+                self._note_broken("收益物品行", e)
         # 区域被引擎自动跟随更新了 -> 同步界面上的坐标显示
         try:
             sig = tuple(tuple(r) if r else None
@@ -508,13 +545,13 @@ class App:
             if sig != getattr(self, "_region_sig", None):
                 self._region_sig = sig
                 self._refresh_regions()
-        except Exception:
-            pass
+        except Exception as e:
+            self._note_broken("区域显示", e)
         # 监听按钮与引擎真实状态保持同步(引擎才是唯一事实来源)
         try:
             self._refresh_watch_btn()
-        except Exception:
-            pass
+        except Exception as e:
+            self._note_broken("监听按钮", e)
         # 引擎线程看门狗:线程退出、或 OCR 假就绪(warmup 推理失败)都重建(10 秒冷却)
         try:
             alive = self.engine.is_alive()
@@ -542,8 +579,8 @@ class App:
                     self.engine = core.Engine(self)
                     self.engine.start()
                     self._restore_engine_switches(keep)
-        except Exception:
-            pass
+        except Exception as e:
+            self._note_broken("引擎看门狗", e)
         self.root.after(POLL_MS, self._drain_logs)
 
     def on_close(self):
