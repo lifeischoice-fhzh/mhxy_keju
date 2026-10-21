@@ -1,0 +1,18 @@
+# 依赖版本钉死(打包可复现)。升依赖时同步改这里,并重跑全量测试。
+#
+# 注意 onnxruntime 有两种发行版,别混装:
+#   rapidocr-onnxruntime 声明依赖 "onnxruntime"(CPU 版),本项目要 GPU 加速装的是
+#   onnxruntime-directml。两者都落进同一个 onnxruntime/ 目录,谁后装谁覆盖 ——
+#   干净机器上装完务必补一句把它盖回去:
+#     pip install -r requirements.txt
+#     pip install --force-reinstall --no-deps onnxruntime-directml==1.24.4
+#   验证:python -c "import onnxruntime as o; print(o.get_available_providers())"
+#   应含 DmlExecutionProvider;缺了就是被 CPU 版覆盖,识别会退回 CPU(慢一倍以上)。
+numpy==2.5.3
+mss==10.2.0
+rapidocr-onnxruntime==1.4.4
+onnxruntime-directml==1.24.4
+rapidfuzz==3.14.6
+pillow==12.3.0
+pywin32==312
+edge-tts==7.3.1

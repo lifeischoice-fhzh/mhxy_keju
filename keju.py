@@ -1,0 +1,96 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""梦幻西游 · 科举答题器(入口)
+
+逻辑拆分:
+- core.py 配置 / OCR / 语音 / 识别引擎调度 + CLI
+- bank.py 题库子系统(读写/更新/匹配)
+- gui.py  单窗口应用的生命周期与按钮回调
+- ui/     窗口布局(keju / widgets)
+- tools/  科举自己的线程与匹配(keju)
+本文件只保留命令行入口:core / bank 里的名字一律调用时现取。
+"""
+import argparse
+import os
+import sys
+
+import bank                 # 题库子系统:更新题库与题库文件路径
+import core                 # 地基:配置/依赖检查/自检与统计(cmd_*)
+from gui import App                 # 窗口入口
+
+
+def _ensure_console():
+    """打包为窗口程序后没有控制台;命令行模式临时分配一个,便于看输出。"""
+    if sys.stdout is None:
+        try:
+            import ctypes
+            ctypes.windll.kernel32.AllocConsole()
+            ctypes.windll.kernel32.SetConsoleOutputCP(65001)   # UTF-8,避免中文乱码
+            sys.stdout = open("CONOUT$", "w", encoding="utf-8", buffering=1)
+            sys.stderr = sys.stdout
+        except Exception:
+            pass
+
+
+def main():
+    ap = argparse.ArgumentParser(description="梦幻西游科举答题器")
+    ap.add_argument("--selftest", action="store_true", help="OCR+匹配自检(合成图片)")
+    ap.add_argument("--seed", type=int, default=core.SELFTEST_SEED, metavar="N",
+                    help=f"自检抽题种子(默认 {core.SELFTEST_SEED},可复现;0=每次随机)")
+    ap.add_argument("--tts-test", action="store_true", help="语音播报测试")
+    ap.add_argument("--build-voice-cache", type=int, nargs="?", const=0, default=None,
+                    metavar="N", help="预合成答案音频到本地缓存(不带N=全部,如 200=前200条)")
+    ap.add_argument("--stats", action="store_true", help="统计每题识别/播报耗时")
+    ap.add_argument("--uncollected", nargs="*", default=None, metavar="序号=答案",
+                    help="列出疑似题库未收录的读法;如 --uncollected 1=常建 直接补进题库")
+    ap.add_argument("--since", default="", metavar="HH:MM",
+                    help="配合 --stats:只看该时刻之后的记录(按当日小时:分钟)")
+    ap.add_argument("--rewards", action="store_true",
+                    help="看今天的答题收益(银两/经验/物品)")
+    ap.add_argument("--update-bank", action="store_true", help="检查并更新题库")
+    args = ap.parse_args()
+
+    if (args.selftest or args.tts_test or args.stats or args.update_bank
+            or args.uncollected is not None or args.rewards
+            or args.build_voice_cache is not None):
+        _ensure_console()          # 打包版才有意义,源码运行无副作用
+    core.ensure_data_files()
+
+    missing = core.check_deps()
+    if missing:
+        print("缺少依赖: " + ", ".join(missing))
+        print("请先安装:  pip install -r "
+              f"\"{os.path.join(core.BASE_DIR, 'requirements.txt')}\"")
+        return 1
+    if not os.path.exists(bank.BANK_PATH):
+        print(f"题库文件不存在: {bank.BANK_PATH}")
+        return 1
+
+    if args.selftest:
+        return core.cmd_selftest(args.seed)
+    if args.tts_test:
+        return core.cmd_tts_test()
+    if args.update_bank:
+        try:
+            _, msg = bank.update_bank()
+            print(msg)
+            return 0
+        except Exception as e:
+            print(f"更新失败: {e}")
+            return 1
+    if args.stats:
+        return core.cmd_stats(args.since)
+    if args.rewards:
+        return core.cmd_rewards()
+    if args.uncollected is not None:
+        return core.cmd_uncollected(args.uncollected)
+    if args.build_voice_cache is not None:
+        return core.cmd_build_voice_cache(args.build_voice_cache)
+
+    core._dpi_aware()
+    App().run()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

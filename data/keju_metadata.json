@@ -1,0 +1,13 @@
+{
+  "source": "official",
+  "page_url": "https://w.163.com/h5/xyq/dtk/index.html#/keju",
+  "chunk_url": "https://w.163.com/h5/xyq/dtk/static/js/exp.b65575c0.js",
+  "chunk_hash": "b65575c0",
+  "record_count": 4333,
+  "activities": {
+    "科举": 2585,
+    "签到": 1747
+  },
+  "fetched_at": "2026-10-11T21:34:35",
+  "content_sha": "97fe1012c691270060dcf78064f3ff6fda2ce1afdb27adfa4cf4efc060bb7a5a"
+}

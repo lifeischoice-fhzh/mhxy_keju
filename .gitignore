@@ -1,0 +1,21 @@
+# 运行时产物(每台机器各不相同)
+config.json
+keju.log
+keju.log.old
+keju.log.*
+data/rewards.json
+data/uncollected.jsonl
+data/keju_questions.backup.json
+
+# 可再生成的缓存(答案音频用 --build-voice-cache 重建)
+voice_cache/
+__pycache__/
+*.py[cod]
+.ruff_cache/
+
+# 构建产物
+build/
+dist/
+
+# 依赖
+.venv/

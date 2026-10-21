@@ -1,0 +1,23 @@
+# 本项目的 ruff 基线:错误类/bug 类严格放行,风格类只留有用的信号。
+# 刻意的"记日志后吞异常"风格见 AGENTS.md —— 与它冲突的 BLE/S10x 家族
+# 干脆不选,别让两百条噪音把真信号淹没。改了风格策略就同步改这份豁免。
+line-length = 79
+
+[lint]
+select = [
+    "E4", "E7", "E9",  # pycodestyle 错误级(缩进/行宽外的硬错误)
+    "F",               # pyflakes(未用导入/变量、未定义名、f-string 缺占位)
+    "B",               # flake8-bugbear(真 bug 模式:可变默认参/裸 except 滥用等)
+    "RUF",             # ruff 自家(失效 noqa、可简化写法)
+    "SIM",             # 可简化的写法
+]
+ignore = [
+    "SIM115",  # 裸 open:日志/缓存的小文件短作用域读写,刻意不开 with 套娃
+    "RUF059",  # 解包后未用的占位变量(_0 之类),不追
+    "RUF001",  # 中文文案里的全角标点被当"歧义 Unicode":本项目中文优先,是设计
+    "RUF002",  # 同上,docstring 版(「物品：」这类写法到处都是)
+    "RUF003",  # 同上,注释版
+    "SIM105",  # try/except-pass 改 contextlib.suppress:房子风格是显式 try+注释
+    "RUF005",  # [a]+list(b) 改 [*a,*b]:纯口味,不追
+    "E741",    # 测试里的单字母循环变量 l(ln 已用在别处):测试代码,不改
+]
