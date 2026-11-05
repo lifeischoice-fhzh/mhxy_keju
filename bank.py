@@ -149,24 +149,6 @@ def fetch_official_bank(activities=None):
     return entries, meta
 
 
-def official_chunk_hash(timeout: int = 15) -> str:
-    """轻量检查:只取官方页面与 app.js,读出数据块哈希(约 6KB)。
-
-    用于"每日自动检查题库":哈希变了才去下载完整题库。
-    """
-    try:
-        html = _http_get(OFFICIAL_PAGE, timeout=timeout).decode("utf-8", "replace")
-        m = re.search(r"static/js/(app\.[a-f0-9]+\.js)", html)
-        if not m:
-            return ""
-        app_js = _http_get(OFFICIAL_PAGE + "static/js/" + m.group(1),
-                           timeout=timeout).decode("utf-8", "replace")
-        hs = re.findall(r'306:"([a-f0-9]{8})"', app_js)
-        return hs[0] if hs else ""
-    except Exception:
-        return ""
-
-
 def fetch_github_bank():
     """【备源】社区镜像仓库。返回 (entries, meta)。"""
     cur = json.loads(_gh_raw("data/current.json").decode("utf-8"))
@@ -199,11 +181,6 @@ def _local_meta() -> dict:
             return json.load(f)
     except Exception:
         return {}
-
-
-def local_meta() -> dict:
-    """本地题库的 metadata(gui 等外层一律调这个公开口;没文件/坏了返回空)。"""
-    return _local_meta()
 
 
 def load_bank_raw() -> list:
@@ -244,11 +221,38 @@ def merge_bank_entries(old_entries: list, new_entries: list) -> tuple:
     return merged, added, kept
 
 
+def _keep_activities(entries, meta):
+    """按配置 bank_activities 过滤更新下来的题,meta 计数同步改写。
+
+    官方源在 fetch 阶段就按配置取了,这层闸主要管镜像备源——它不带活动
+    过滤,不拦的话切到镜像时签到题会被"只加不减"地合并回来。
+    activity 缺失按 keju 算(与 fetch_official_bank 的口径一致);
+    配置缺失/写成两个活动之外时不过滤,行为同从前。
+    """
+    import core
+    acts = (core.keju_cfg(core.load_config()).get("bank_activities")
+            or ["keju", "qiandao"])
+    keep = {a for a in acts if a in OFFICIAL_ACTIVITY_NAMES}
+    if len(keep) >= len(OFFICIAL_ACTIVITY_NAMES) or not keep:
+        return entries, meta
+    kept = [e for e in entries if e.get("activity", "keju") in keep]
+    per: dict = {}
+    for e in kept:
+        a = e.get("activity", "keju")
+        per[a] = per.get(a, 0) + 1
+    meta = dict(meta)
+    meta["record_count"] = len(kept)
+    meta["activities"] = {OFFICIAL_ACTIVITY_NAMES.get(k, k): v
+                          for k, v in per.items()}
+    return kept, meta
+
+
 def update_bank():
     """检查并更新题库:优先官方源,失败回退镜像源。返回 (是否更新, 说明)。
 
     更新是"只加不减":旧题库里的题(含官方已下架、你手工补的)一条都不会丢,
-    只有新题目会被追加。想彻底重建就删掉 data/keju_questions.json 再更新。
+    只有新题目会被追加;收录哪些活动由配置 bank_activities 决定。
+    想彻底重建就删掉 data/keju_questions.json 再更新。
     """
     errors = []
     try:
@@ -260,6 +264,7 @@ def update_bank():
         except Exception as e2:
             errors.append(f"镜像源失败({e2})")
             raise ValueError("; ".join(errors)) from e2
+    entries, meta = _keep_activities(entries, meta)
 
     old_entries = load_bank_raw()
     merged, added, kept = merge_bank_entries(old_entries, entries)
@@ -321,9 +326,13 @@ class QuestionBank:
     def match(self, text: str, threshold: float):
         """返回 (entry|None, 最高相似度)。低于阈值时 entry 为 None。"""
         import core
+        return self.match_norm(core.normalize(text), threshold)
+
+    def match_norm(self, q_norm: str, threshold: float):
+        """同 match,收归一化后的题干(调用方已算过就别重复归一化)。"""
         from rapidfuzz import fuzz, process
 
-        q = core.normalize(text)
+        q = q_norm
         if not q or not self.entries:
             return None, 0.0
         if len(q) < 10:
@@ -347,9 +356,10 @@ class QuestionBank:
     def prefilter(self, q_norm: str, cutoff: float):
         """滑窗找题的单指标低成本预筛:fuzz.ratio 快速排除明显不沾边的窗口。
 
-        返回 (score, entry) 或 None。通过预筛的仍要走 match() 三指标精匹配,
-        这里只负责把"肯定到不了阈值"的窗口挡在门外(整窗几百个窗口时省大头)。
-        q_norm 传归一化后的文本(调用方在滑窗里已经算过,不在这里重复算)。
+        返回 (score, entry) 或 None。通过预筛的仍要走 match/match_norm 三指标
+        精匹配,这里只负责把"肯定到不了阈值"的窗口挡在门外(整窗几百个窗口时
+        省大头)。q_norm 传归一化后的文本(调用方在滑窗里已经算过,不在这里
+        重复算)。
         """
         from rapidfuzz import fuzz, process
 

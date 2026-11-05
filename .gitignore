@@ -5,6 +5,7 @@ keju.log.old
 keju.log.*
 data/rewards.json
 data/uncollected.jsonl
+data/events.jsonl
 data/keju_questions.backup.json
 
 # 可再生成的缓存(答案音频用 --build-voice-cache 重建)

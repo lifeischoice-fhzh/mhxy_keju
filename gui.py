@@ -1,7 +1,7 @@
 """界面层:单窗口应用 —— 启动即科举答题器,窗口生命周期与各按钮回调(布局在 ui/)。"""
 import os
-import queue
 import time
+from tkinter import messagebox
 
 import bank                 # 题库子系统:只有"检查/更新题库"这条路用它
 import core                 # 地基:配置/截图/语音/引擎与键名归属表
@@ -9,21 +9,72 @@ import core                 # 地基:配置/截图/语音/引擎与键名归属�
 from tools import keju as tools_keju   # 收益文案(纯函数,只读)
 from ui import keju as ui_keju
 from ui.keju import (MINI_FONT, MINI_FONT_MIN, MINI_LABEL_MAX_W,
-                     MINI_MARGIN, MINI_TOP)
-from ui.widgets import fade_out, pop_in, stop_anim
+                     MINI_MARGIN, MINI_TOP, mute_palette)
+from ui.widgets import pop_in, stop_anim
+
+
+def _cleanup_litter():
+    """关闭后清掉可再生的杂物:字节码/日志轮转残留/ruff 缓存/打包中间产物;
+    语音缓存超上限时从最旧开始删(缓存是速度优化,不是数据)。
+
+    只在源码运行时做:打包版(sys.frozen)不动自己所在目录。
+    """
+    import shutil
+    import sys
+    from pathlib import Path
+
+    if getattr(sys, "frozen", False):
+        return
+    root = Path(__file__).parent
+    for rel in ("build", ".ruff_cache", "__pycache__", "tools/__pycache__",
+                "ui/__pycache__", "keju.log.old"):
+        p = root / rel
+        try:
+            if p.is_dir():
+                shutil.rmtree(p, ignore_errors=True)
+            elif p.exists():
+                p.unlink()
+        except Exception:
+            pass
+    cache, cap = root / "voice_cache", 40 * 1024 * 1024
+    try:
+        files = sorted(cache.glob("*.mp3"), key=lambda p: p.stat().st_mtime)
+        total = sum(p.stat().st_size for p in files)
+        for p in files:
+            if total <= cap:
+                break
+            total -= p.stat().st_size
+            p.unlink(missing_ok=True)
+    except Exception:
+        pass
 
 
 ENGINE_RESTART_MAX = 3    # 看门狗连续重建上限:到顶就停手,别每 10 秒重建一次刷日志
 
 
+def _set_appusermodelid():
+    """给进程设独立 AppUserModelID(须在首个窗口创建前调)。
+
+    不设的话,从控制台/脚本拉起时任务栏会把本应用和控制台合成一颗按钮,
+    按钮图标显示成 Python 终端;设了之后应用按独立程序显示,图标才认
+    `ui_keju.set_icon` 挂上去的状元帽。
+    """
+    import ctypes
+    try:
+        shell32 = ctypes.windll.shell32
+        shell32.SetCurrentProcessExplicitAppUserModelID.argtypes = [
+            ctypes.c_wchar_p]
+        shell32.SetCurrentProcessExplicitAppUserModelID("Mhxy.Keju.FengErYuLuNa")
+    except Exception:
+        pass
+
+
 # ---------------- GUI ----------------
 
-POLL_MS = 50      # 界面刷新间隔:日志框落屏(50ms 人眼看不出延迟)
+POLL_MS = 50      # 界面刷新间隔:答案上屏(50ms 人眼看不出延迟)
 
 class App:
     """组合 Tk 根窗口与各工作线程。"""
-
-    LOG_BOX_TOOL = "keju"     # 界面上的滚动日志框只显示科举+公共的行
 
     # ---- 配置读写:按归属表归到对应分区 ----
     def _section(self, key):
@@ -36,7 +87,7 @@ class App:
             seen = self._unknown_keys = set()
         if key not in seen:
             seen.add(key)
-            self.log(f"[配置]键「{key}」不在归属表里,已暂存到 app 分区", ui=False)
+            self.log(f"[配置]键「{key}」不在归属表里,已暂存到 app 分区")
         return "app"
 
     def _get(self, key, default=None):
@@ -48,13 +99,15 @@ class App:
     def __init__(self):
         import tkinter as tk
 
+        _set_appusermodelid()
         self.root = tk.Tk()
         # 按钮回调里没接住的异常,默认只打到 stderr(用户根本看不到);记进日志
         self.root.report_callback_exception = self._on_tk_error
         self.cfg = core.load_config()
         self.bank = bank.QuestionBank()
         self.last_answer = ""
-        self._logs: queue.Queue = queue.Queue()
+        self.last_question = ""
+        self.skin = self._get("skin", "dark")
         try:
             if os.path.exists(core.LOG_PATH):
                 import datetime
@@ -69,7 +122,7 @@ class App:
         try:
             n = core.prune_events()    # 事件只留当天:统计口径与收益一致
             if n:
-                self.log(f"[事件]已清掉 {n} 条非当天的识别记录", ui=False)
+                self.log(f"[事件]已清掉 {n} 条非当天的识别记录")
         except Exception:
             pass
         self.log(f"[应用]启动 · 题库 {len(self.bank)} 题")
@@ -77,12 +130,11 @@ class App:
         try:
             n = core.prune_voice_cache(self.cfg, self.bank)
             if n:
-                self.log(f"[语音]已清理 {n} 个与当前语音参数不符的旧缓存",
-                         ui=False)
+                self.log(f"[语音]已清理 {n} 个与当前语音参数不符的旧缓存")
         except Exception:
             pass
 
-        ui_keju.build(self)
+        ui_keju.build(self, self.skin)
         # 主窗只有一个:摆在 build 里定好的位置,浮入并提到前面
         xy = getattr(self.root, "p_xy", None)
         pop_in(self.root, xy=xy)
@@ -91,41 +143,31 @@ class App:
         except Exception:
             pass
 
-        self.speaker = core.Speaker(self.cfg, lambda m: self.log(m, ui=False))
+        self.speaker = core.Speaker(self.cfg, lambda m: self.log(m))
         self.speaker.start()
         self._engine_bad = 0           # 看门狗连续不健康次数(退避用,启动归零)
         self.engine = core.Engine(self)
         self.engine.start()
 
-        self._auto_bank_check()
-        self.log("[应用]就绪 —— 打开「自动监听」开始答题")
+        self._auto_bank_update()
+        self.log("[应用]就绪 —— 已默认开启自动监听,定位到客户端即开始答题")
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         self.root.after(POLL_MS, self._drain_logs)
         # 启动即自动定位:坐标不留在配置里,每次启动都按当前窗口重新找
         self.on_autolocate()
 
     # ---- 界面回调 ----
-    def _refresh_watch_btn(self):
-        """监听按钮文案/高亮跟引擎状态走(按钮可能已销毁,异常都兜住)。"""
-        on = bool(getattr(self.engine.keju_tool, "watching", False))
+    def _refresh_mode_btn(self):
+        """右上「御前科举」单按钮:文案显示当前模式,点一下切换。"""
         try:
-            self.watch_btn.configure(
-                text=("自动监听: 开" if on else "自动监听: 关"))
-            self.watch_btn.configure(style="Accent.TButton" if on
-                                     else "TButton")
+            self.mode_btn.set_text(
+                "御前科举" if bool(self._get("exam_mode", True))
+                else "三大学士")
         except Exception:
             pass
 
-    def _refresh_mode_btn(self):
-        """两个模式按钮:当前生效的高亮为蓝色。"""
-        keju = bool(self._get("exam_mode", True))
-        try:
-            self.mode_keju_btn.configure(
-                style="Accent.TButton" if keju else "TButton")
-            self.mode_plain_btn.configure(
-                style="TButton" if keju else "Accent.TButton")
-        except Exception:
-            pass
+    def on_toggle_mode(self):
+        self._set_exam_mode(not bool(self._get("exam_mode", True)))
 
     def _set_exam_mode(self, keju: bool):
         if bool(self._get("exam_mode", True)) == keju:
@@ -137,50 +179,16 @@ class App:
         tools_keju.record_event("mode", mode="御前科举" if keju else "三大学士")
 
     def _refresh_regions(self):
-        """刷新各客户端槽位的坐标显示。"""
+        """刷新客户端胶囊(角色名/未定位);引擎还没起来时也安全。"""
         regions = ((self._get("regions") or [])
                    + [None] * core.MAX_CLIENTS)
-        for i in range(core.MAX_CLIENTS):
-            r = regions[i]
-            self.region_vars[i].set(
-                f"({r[0]},{r[1]})-({r[2]},{r[3]})" if r else "未定位")
-
-    def on_reset_stats(self):
-        self.engine.keju_tool.reset_stats()
-        self.log("[统计]本局已重置")
-
-    def on_earn_detail(self):
-        """收益明细:每一轮的用时/银两/物品(窗口在 ui/keju)。"""
-        ui_keju.open_earn_detail(self)
-
-    def on_earn_detail_refresh(self):
-        """收益明细窗的内容:每轮一行(没数据给空态提示)。
-
-        ui/keju 只建控件;读状态、填文本是行为,归 App(红线)。
-        """
-        try:
-            rounds = self.engine.keju_tool.ui_state()["rounds"]
-        except Exception:
-            rounds = []                  # 状态口不在:窗开着但内容空,不拖垮刷新
-        lines = tools_keju.reward_round_lines(rounds)
-        txt = getattr(self, "earn_detail_text", None)
-        if txt is None:
-            return
-        try:
-            txt.configure(state="normal")
-            txt.delete("1.0", "end")
-            txt.insert("1.0", "\n".join(lines) if lines
-                       else "还没有完成的轮次。\n"
-                            "(一轮 = 游戏里那句“恭喜你完成会试，共用时X分Y秒”)")
-            txt.configure(state="disabled")
-        except Exception:
-            pass
-
-    def on_earn_detail_close(self):
-        """明细窗关闭:跑完淡出再销毁(和别的窗口一个动效)。"""
-        win = getattr(self, "earn_detail_win", None)
-        if win is not None and win.winfo_exists():
-            fade_out(win, then=win.destroy)
+        names = []
+        if getattr(self, "engine", None) is not None:
+            try:
+                names = self.engine.keju_tool.ui_state().get("names") or []
+            except Exception:
+                names = []
+        ui_keju.refresh_capsules(self, regions, names)
 
     def on_toggle_mute(self):
         self._set("mute", not bool(self._get("mute")))
@@ -188,23 +196,6 @@ class App:
         self._refresh_mute_btn()
         self.log("[语音]已静音(界面照旧显示答案)"
                  if self._get("mute") else "[语音]已恢复")
-
-    def _refresh_mute_btn(self):
-        on = bool(self._get("mute"))
-        try:
-            self.mute_btn.configure(text=("静音: 开" if on else "静音: 关"),
-                                    style=("Accent.TButton" if on else "TButton"))
-        except Exception:
-            pass
-
-    def on_clear_log(self):
-        """清空界面滚动框(keju.log 文件不动)。"""
-        try:
-            self.log_box.configure(state="normal")
-            self.log_box.delete("1.0", "end")
-            self.log_box.configure(state="disabled")
-        except Exception:
-            pass
 
     def on_autolocate(self):
         """按窗口枚举,把每个梦幻西游客户端"整窗口"填成一条题目对话框区域。
@@ -227,38 +218,82 @@ class App:
             core.save_config(self.cfg)
             if minimized:      # 最小化时截不到画面,得让用户把窗口显示出来
                 self.log("[客户端]客户端是最小化的,定位不到 —— "
-                         "把游戏窗口显示出来,再点一次「自动定位客户端」")
+                         "把游戏窗口显示出来,再点一次「客户端刷新」")
             else:
                 self.log("[客户端]没找到梦幻西游客户端窗口:"
-                         "确认游戏已启动,再点一次「自动定位客户端」")
+                         "确认游戏已启动,再点一次「客户端刷新」")
+            return
+        # 只定位支持的两档(640×480 / 860×600):其它档识别慢、字也小,
+        # 跳过并弹框说明;混合时支持的照常定位
+        ok = [(t, b) for t, b in wins if core.client_supported(b)]
+        bad = [(t, b) for t, b in wins if not core.client_supported(b)]
+        if not ok:
+            self._log_unsupported(bad)
+            self._warn_resolution()
+            core.save_config(self.cfg)
             return
         self._set("regions", [])
         regs = self._get("regions")
-        for _title, box in wins[:core.MAX_CLIENTS]:
+        for _title, box in ok[:core.MAX_CLIENTS]:
             regs.append([int(v) for v in box])
         while len(regs) < core.MAX_CLIENTS:
             regs.append(None)
-        self.engine.keju_tool.set_auto_boxes([r for r in regs if r])
+        names = [core.client_name(t) for t, _box in ok[:core.MAX_CLIENTS]]
+        self.engine.keju_tool.set_auto_boxes([r for r in regs if r], names)
         core.save_config(self.cfg)
         self._refresh_regions()
-        for i, (_title, box) in enumerate(wins[:core.MAX_CLIENTS]):
+        for i, (_title, box) in enumerate(ok[:core.MAX_CLIENTS]):
             size, _is_min = core.client_size_info(box)
+            tail = f" 角色「{names[i]}」" if names[i] else ""
             self.log(f"[客户端{i + 1}]整个客户端 "
-                     f"({box[0]},{box[1]})-({box[2]},{box[3]}) {size}")
+                     f"({box[0]},{box[1]})-({box[2]},{box[3]}) {size}{tail}")
+        self._log_unsupported(bad)
         n_set = len([r for r in regs if r])
         extra = (f";最多支持 {core.MAX_CLIENTS} 个,"
-                 f"多出的 {len(wins) - n_set} 个舍弃"
-                 if len(wins) > core.MAX_CLIENTS else "")
+                 f"多出的 {len(ok) - n_set} 个舍弃"
+                 if len(ok) > core.MAX_CLIENTS else "")
         self.log(f"[客户端]发现 {len(wins)} 个客户端,已定位 {n_set} 个{extra}")
-        sizes = [core.client_size_info(w[1]) for w in wins[:core.MAX_CLIENTS]]
+        if bad:
+            self._warn_resolution()
+        sizes = [core.client_size_info(w[1]) for w in ok[:core.MAX_CLIENTS]]
         if any(not min_ok for _t, min_ok in sizes):
             self.log(f"[提示]不是最小分辨率 —— 游戏分辨率调成 "
                      f"{core.MIN_GAME_RES[0]}×{core.MIN_GAME_RES[1]} 效果最佳"
                      "(截图更快、字也清楚)")
+            self._hint_resolution()
         self.log("[提示]挪动客户端或改了分辨率后,会自动跟随")
+        if not self.engine.keju_tool.watching:
+            self.engine.set_watch(True)   # 自动监听默认开:定位到客户端就(重新)接管
         if not bool(self._get("exam_mode", True)):
-            self.log("[提示]整窗口区域在「三大学士」模式下噪声大,"
-                     "建议切「御前科举」模式")
+            self.log("[提示]「三大学士」没有结构锚点,靠题库比对认题,"
+                     "「御前科举」更稳")
+
+    def _log_unsupported(self, bad):
+        """逐个记一行不支持的客户端(跳过原因落在文件里,弹框只报总数)。"""
+        for _title, box in bad:
+            self.log(f"[客户端]分辨率不支持,已跳过: "
+                     f"{core.client_size_info(box)[0]}"
+                     f"(只支持 {core.supported_res_text()})")
+
+    def _warn_resolution(self):
+        """定位到了不支持分辨率档的客户端:弹一次框说明(测试里桩掉)。
+
+        跳过了哪些窗口走日志(_log_unsupported),框里只说规则一句话。
+        """
+        messagebox.showwarning(
+            "分辨率不支持",
+            f"目前只支持 {core.supported_res_text()} 分辨率,"
+            f"{core.MIN_GAME_RES[0]}×{core.MIN_GAME_RES[1]} 效果最佳")
+
+    def _hint_resolution(self):
+        """定位到了非最小档的支持客户端(如 800×600):弹框建议调最小档。
+
+        能用,但最小分辨率效果更佳 —— 文案用户定的,一句话就好。
+        """
+        messagebox.showinfo(
+            "分辨率建议",
+            f"建议使用最小分辨率 {core.MIN_GAME_RES[0]}×{core.MIN_GAME_RES[1]}"
+            ",效果更佳")
 
     def _forget_region_memory(self):
         """清掉各区域记住的上一题/画面指纹(区域变了,旧记忆作废)。"""
@@ -271,40 +306,50 @@ class App:
         self._forget_region_memory()
         self._refresh_regions()
 
-    def on_clear_regions(self):
-        self._clear_all_regions()
+    def on_remove_client(self, i):
+        """胶囊上的 ×:把第 i 个客户端从定位里删掉,其余整体前移一位。
+
+        区域、跟随基准(自动定位当时的矩形)和角色名一起去掉;被删那格的
+        画面/题目记忆也作废。跟随基准比窗口枚举少了的话就不再自动跟随
+        (can_follow_clients 要求数量一致),重新点「客户端刷新」即可。
+        """
+        regions = ((self._get("regions") or [])
+                   + [None] * core.MAX_CLIENTS)
+        if not regions[i]:
+            return
+        self.engine.keju_tool.drop_client(i)   # 先动工具:它按旧配置数下标
+        kept = [list(r) for j, r in enumerate(regions) if r and j != i]
+        self._set("regions", kept + [None] * (core.MAX_CLIENTS - len(kept)))
         core.save_config(self.cfg)
-        self.log("[客户端]全部清除")
+        self._refresh_regions()
+        self.log(f"[客户端]已移除客户端{i + 1},其余保持不变;"
+                 "要重新全量定位就点「客户端刷新」")
 
-    def on_toggle_watch(self):
-        self._engine_bad = 0        # 用户重新点「自动监听」= 重新给看门狗机会重建
-        self.engine.toggle_watch()
-        self._refresh_watch_btn()
-
-    def _save_interval(self):
-        try:
-            self._set("interval", min(core.MAX_INTERVAL, max(
-                core.MIN_INTERVAL, float(self.interval_var.get()))))
-        except ValueError:
-            return
-        self.interval_var.set(f"{self._get('interval'):.1f}")  # 回显夹紧后的值
-
-    def on_manual_cycle(self):
+    def on_manual_scan(self):
+        """手动识别:立刻投递一次识别任务(不受自动监听开关限制)。"""
         self.engine.request_cycle()
+        self.log("[手动识别]已手动触发一次识别")
 
-    def on_fullscan(self):
-        self.engine.request_fullscan()
+    def on_toggle_skin(self):
+        """换肤:玄夜(深)/ 玄白(浅)一键切换,选择落盘下次启动沿用。"""
+        skin = "light" if self._get("skin", "dark") == "dark" else "dark"
+        self._set("skin", skin)
+        core.save_config(self.cfg)
+        ui_keju.apply_skin(self, skin)
+        self.log("[界面]已切换到"
+                 + ("玄夜" if skin == "dark" else "玄白") + "皮肤")
 
-    def on_update_bank(self):
-        """手动触发题库更新(后台线程)。"""
-        if getattr(self, "_bank_updating", False):
-            return
-        self._bank_updating = True
-        self.log("[题库]正在检查更新…")
-        import threading as _th
-        _th.Thread(target=self._bank_update_worker, daemon=True).start()
+    def _refresh_mute_btn(self):
+        """静音钮文案+配色跟状态走:静音=红色系「语音恢复」,未静音=普通。"""
+        try:
+            muted = bool(self._get("mute"))
+            self.mute_btn.set_text(
+                "语音恢复" if muted else "语音静音")
+            self.mute_btn.set_palette(mute_palette(self.skin, muted))
+        except Exception:
+            pass
 
-    def _bank_update_worker(self):
+    def _bank_update_worker(self, mark_day=None):
         try:
             updated, msg = bank.update_bank()
             if updated:
@@ -315,7 +360,7 @@ class App:
                 if missing:
                     self.log(f"[语音]检测到 {missing} 条答案没有音频缓存,后台自动合成中…")
                     done, failed, _ = core.build_voice_cache(
-                        workers=4, log=lambda m: self.log(m, ui=False))
+                        workers=4, log=lambda m: self.log(m))
                     self.log(f"[语音]新答案音频合成完成: 成功 {done},失败 {failed}")
                 else:
                     self.log("[语音]所有答案音频均已就绪")
@@ -323,37 +368,29 @@ class App:
                 self.log(f"[题库]{msg}")
         except Exception as e:
             self.log(f"[题库]更新失败(继续用原题库): {e}")
+        else:
+            if mark_day:            # 成功(含"已是最新")才记当天:失败的下次再试
+                self._set("last_bank_check", mark_day)
+                try:
+                    core.save_config(self.cfg)
+                except Exception:
+                    pass
         finally:
             self._bank_updating = False
 
-    def _auto_bank_check(self):
-        """启动时静默检查题库(每天一次);有新版本就自动更新。"""
+    def _auto_bank_update(self):
+        """每天首次启动后台更新一次题库,当天再启动直接跳过。
+
+        更新成功(含"已是最新")才记 last_bank_check;失败的当天不记,
+        下次启动会再试。没有界面按钮。
+        """
         import datetime
         today = datetime.date.today().isoformat()
         if self._get("last_bank_check") == today:
             return
-        self._set("last_bank_check", today)
-        try:
-            core.save_config(self.cfg)
-        except Exception:
-            pass
-
-        def work():
-            try:
-                cur = bank.official_chunk_hash()
-                if not cur:
-                    return                                  # 网络不可用:静默跳过
-                if cur == bank.local_meta().get("chunk_hash"):
-                    self.log("[题库]检查: 已是最新", ui=False)
-                    return
-                self.log("[题库]检测到新版本,正在自动更新…")
-                self._bank_updating = True
-                self._bank_update_worker()
-            except Exception as e:
-                self.log(f"[题库]自动检查失败(忽略): {e}", ui=False)
-
         import threading as _th
-        _th.Thread(target=work, daemon=True).start()
+        _th.Thread(target=self._bank_update_worker, args=(today,),
+                   daemon=True).start()
 
     def on_test_tts(self):
         self.speaker.say(core.SAY_TTS_TEST)
@@ -369,6 +406,21 @@ class App:
         ui_keju.build_mini(self)
         self._anchor_mini()
         pop_in(self.mini, offset=None)     # 迷你窗只淡入:它的位置由 _anchor_mini 随时管,不碰 geometry
+
+    def on_mini_drag_start(self, e):
+        """抓着大字开始拖迷你窗(记下鼠标与窗口的相对位置)。"""
+        m = self.mini
+        if m and m.winfo_exists():
+            self._mini_drag = (e.x_root, e.y_root, m.winfo_x(), m.winfo_y())
+
+    def on_mini_drag_move(self, e):
+        """拖动中:按开场记的相对位置挪窗;松手后 _anchor_mini 会把新位置
+        认作用户位置(照常沿用,不会被拉回右上角)。"""
+        at = getattr(self, "_mini_drag", None)
+        m = self.mini
+        if not at or not m or not m.winfo_exists():
+            return
+        m.geometry(f"+{at[2] + e.x_root - at[0]}+{at[3] + e.y_root - at[1]}")
 
     def _anchor_mini(self):
         """定位小窗:默认钉在屏幕右上角;用户自己拖过之后,就按他放的位置来。
@@ -419,22 +471,18 @@ class App:
         except Exception:
             where = ""
         try:
-            self.log(f"[界面]回调出错({exc.__name__}):{val}{where}", ui=False)
+            self.log(f"[界面]回调出错({exc.__name__}):{val}{where}")
         except Exception:
             pass
 
-    def log(self, msg: str, ui: bool = True, detail: str = "",
-            ui_text=None):
-        """ui=False 的消息只写 keju.log 文件,不进界面滚动框。
+    def log(self, msg: str, detail: str = ""):
+        """写一条日志进 keju.log(界面上没有日志框,全部只落文件)。
 
-        detail: 只写进文件、界面不显示的补充信息(如 OCR/匹配耗时),
-        方便事后按日志定位问题。
-        ui_text: 界面上换一段短文案(文件里还是完整的 msg)。
+        detail: 补充信息(如 OCR/匹配耗时),同样进文件。
         消息统一成 [时间][模块]内容;万一哪条忘了写模块,兜底成 [其他]。
         """
         if not msg.startswith("["):
             msg = "[其他]" + msg
-        self._logs.put((msg, ui))
         try:
             with open(core.LOG_PATH, "a", encoding="utf-8") as f:
                 stamp = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -456,37 +504,28 @@ class App:
         seen.add(key)
         try:
             self.log(f"[界面]刷新项「{key}」失败(同类失败不再记): "
-                     f"{type(err).__name__}: {err}", ui=False)
+                     f"{type(err).__name__}: {err}")
         except Exception:
             pass
 
     def _drain_logs(self):
         # 这一趟的几步各自兜一层:这个方法是 `after` 自排自的整条界面刷新链的
-        # 入口,只要有一次异常漏出去,链就断了 —— 窗口还能拖、引擎还在扫,
-        # 但日志框再也不更新,看起来就是"卡死不动"。
+        # 入口,只要有一次异常漏出去,链就断了 —— 窗口还在、引擎还在扫,
+        # 但答案再也不上屏,看起来就是"卡死不动"。
+        # 状态灯:监听中 = 绿点闪烁;未监听/未定位 = 红点常亮
         try:
-            while True:
-                try:
-                    msg, ui = self._logs.get_nowait()
-                except queue.Empty:
-                    break
-                # 日志分家:这个滚动框只显示科举 + 公共的行;
-                # ui=False 的只写文件,不进滚动框。
-                if not ui:
-                    continue
-                scope = core.log_scope(msg)
-                if scope and scope != self.LOG_BOX_TOOL:
-                    continue
-                stamp = time.strftime("%H:%M:%S")
-                tag = ""
-                if "匹配" in msg and "【" in msg:
-                    tag = "match"          # 认出题目、给出答案的那一行
-                self.log_box.configure(state="normal")
-                self.log_box.insert("end", f"[{stamp}]{msg}\n", tag)
-                self.log_box.see("end")
-                self.log_box.configure(state="disabled")
+            watching = bool(getattr(self.engine.keju_tool, "watching", False))
+            self.status_dot.set_state(watching)
         except Exception as e:
-            self._note_broken("日志落屏", e)
+            self._note_broken("状态灯", e)
+        # 题目识别区:内容变了才重画(识别线程只摆 last_question/last_answer)
+        try:
+            qa = (self.last_question or "", self.last_answer or "")
+            if qa != getattr(self, "_hero_shown", None):
+                self._hero_shown = qa
+                ui_keju.draw_hero(self.hero_canvas, *qa, self.skin)
+        except Exception as e:
+            self._note_broken("答案上屏", e)
         # 迷你窗显示最近答案(单行大号字;过长自动缩字号)
         try:
             if getattr(self, "mini", None) and self.mini.winfo_exists():
@@ -509,49 +548,17 @@ class App:
                     self._anchor_mini()
         except Exception as e:
             self._note_broken("迷你窗", e)
-        # 本局统计 + 今日收益刷新:只认工具的只读状态口(ui_state)
+        # 区域被引擎自动跟随更新了(或角色名变了)-> 同步胶囊显示
         try:
-            st = self.engine.keju_tool.ui_state()
-        except Exception as e:
-            self._note_broken("本局统计", e)
-            st = None                  # 状态口不在/坏了:这一拍就不动界面
-        if st is not None:
-            try:
-                s = st.get("stats") or {}
-                n = s.get("n", 0)
-                avg = (s.get("resp_sum", 0.0) / n) if n else 0.0
-                um = s.get("unmatched", 0)
-                txt = (f"本局: {n} 题 · 平均响应 {avg:.2f}s"
-                       + (f" · 未匹配 {um}" if um else ""))
-                if self.round_var.get() != txt:
-                    self.round_var.set(txt)
-            except Exception as e:
-                self._note_broken("本局统计行", e)
-            try:
-                txt = tools_keju.reward_earn_text(st.get("silver"))
-                if self.reward_var.get() != txt:
-                    self.reward_var.set(txt)
-                sig = (tuple((n, c) for n, c in (st.get("items") or [])),
-                       self.reward_items_canvas.winfo_width())
-                if sig != getattr(self, "_earn_sig", None):
-                    self._earn_sig = sig
-                    ui_keju.draw_reward_items(self, st.get("items") or [])
-            except Exception as e:
-                self._note_broken("收益物品行", e)
-        # 区域被引擎自动跟随更新了 -> 同步界面上的坐标显示
-        try:
-            sig = tuple(tuple(r) if r else None
-                        for r in (self._get("regions") or []))
+            names = self.engine.keju_tool.ui_state().get("names") or []
+            sig = (tuple(tuple(r) if r else None
+                         for r in (self._get("regions") or [])),
+                   tuple(names))
             if sig != getattr(self, "_region_sig", None):
                 self._region_sig = sig
                 self._refresh_regions()
         except Exception as e:
             self._note_broken("区域显示", e)
-        # 监听按钮与引擎真实状态保持同步(引擎才是唯一事实来源)
-        try:
-            self._refresh_watch_btn()
-        except Exception as e:
-            self._note_broken("监听按钮", e)
         # 引擎线程看门狗:线程退出、或 OCR 假就绪(warmup 推理失败)都重建(10 秒冷却)
         try:
             alive = self.engine.is_alive()
@@ -568,8 +575,7 @@ class App:
                     if self._engine_bad == ENGINE_RESTART_MAX + 1:   # 只提示这一次
                         self.log(f"[引擎]连续 {ENGINE_RESTART_MAX} 次重建都没恢复"
                                  "(OCR 起不来或线程退出),已停止自动重建:"
-                                 "请检查显卡驱动/依赖,"
-                                 "修好后重新点「自动监听」或重启应用")
+                                 "请检查显卡驱动/依赖,修好后重启应用")
                 else:
                     self.log("[引擎]线程已退出,正在自动重启…" if not alive
                              else "[引擎]OCR 不健康,正在重建引擎…")
@@ -590,6 +596,7 @@ class App:
             core.save_config(self.cfg)
         except Exception:
             pass
+        _cleanup_litter()         # 顺手清掉可再生杂物(见函数说明)
         if getattr(self, "mini", None):
             stop_anim(self.mini)          # 没跑完的动效先停,别跟销毁撞上
         self.speaker.quit()
@@ -620,13 +627,13 @@ class App:
             try:
                 refresh()
             except Exception as e:
-                self.log(f"[引擎]重排工具线程失败: {e}", ui=False)
+                self.log(f"[引擎]重排工具线程失败: {e}")
         set_watch = getattr(self.engine, "set_watch", None)
         if keep["watching"] and set_watch is not None:
             try:
                 set_watch(True)
             except Exception as e:
-                self.log(f"[引擎]恢复自动监听失败: {e}", ui=False)
+                self.log(f"[引擎]恢复自动监听失败: {e}")
         elif keep["watching"]:
             # 没有 set_watch 的桩:至少把标志摆对,别替用户静默关掉
             keju = getattr(self.engine, "keju_tool", None)
@@ -634,7 +641,7 @@ class App:
                 keju.watching = True
                 keju.enabled = True
         self.log("[引擎]用户开关已按重启前恢复:自动监听 "
-                 f"{'开' if keep['watching'] else '关'}", ui=False)
+                 f"{'开' if keep['watching'] else '关'}")
 
     def _retire_engine(self, old):
         """回收旧引擎:先停它的识别,再把 stop+join 丢后台,Tk 线程绝不在这等。
@@ -661,7 +668,7 @@ class App:
             try:
                 shutdown()
             except Exception as e:
-                self.log(f"[引擎]旧引擎关闭失败(忽略): {e}", ui=False)
+                self.log(f"[引擎]旧引擎关闭失败(忽略): {e}")
 
         _th.Thread(target=_bg, name="引擎回收", daemon=True).start()
 

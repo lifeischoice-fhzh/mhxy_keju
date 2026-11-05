@@ -38,6 +38,18 @@ REPEAT_GUARD_S = 5
 # (实测:≥84% 是真题 + OCR 小噪声,≤75% 全是误报;配置阈值只能往上调,调不低)
 MIN_MATCH_PCT = 80
 
+# 三大学士(无锚点)只扫底部题面对话框:整窗其余全是噪声(任务追踪/聊天/名字),
+# 还拖慢 OCR。对话框是固定 UI,按客户端占比框一条带,四周留足余量
+# (按 860×600 档实测对话框约横 6%~88%、纵 45%~70%)。
+PLAIN_BAND = (0.04, 0.42, 0.91, 0.73)   # (左, 上, 右, 下) 占整窗比例
+
+
+def plain_band(x1, y1, x2, y2):
+    """整窗矩形 -> 三大学士模式下真正要 OCR 的对话框带(对应 PLAIN_BAND)。"""
+    w, h = x2 - x1, y2 - y1
+    return (int(x1 + w * PLAIN_BAND[0]), int(y1 + h * PLAIN_BAND[1]),
+            int(x1 + w * PLAIN_BAND[2]), int(y1 + h * PLAIN_BAND[3]))
+
 
 # 锚点触发:块里有"科举",且出现"大赛"/"题目",或"第X关"的结构。
 # 不要求"御前"在场 —— 日志实测"御前科举大赛第16关"常被 OCR 读成
@@ -88,11 +100,11 @@ def extract_anchored_question(blocks):
     return "", []
 
 
-def fullscan_find(bank, blocks: list, threshold: float,
-                  use_anchor: bool = True):
-    """在全屏文本块里定位题目。
+def find_questions(bank, blocks: list, threshold: float,
+                   use_anchor: bool = True):
+    """在整屏的文字块里定位题目(锚点优先,滑窗兜底)。
 
-    对相邻文本块做 1~3 块的滑窗拼接,与题库匹配;
+    对相邻文本块做 1~6 块的滑窗拼接,与题库匹配;
     匹配到的窗口视为"一个题目"。返回 {id(entry): (score, entry, text, win)} ,
     win 为命中窗口的文本块下标列表。
     """
@@ -105,26 +117,36 @@ def fullscan_find(bank, blocks: list, threshold: float,
     # 剥头后与题库(裸题干)精确比对,不受聊天/提示文字干扰
     a_text, a_win = (extract_anchored_question(blocks) if use_anchor
                      else ("", []))
-    if len(core.normalize(a_text)) >= MIN_QUESTION_CHARS:
-        entry, score = bank.match(a_text, threshold)
+    a_q = core.normalize(a_text)
+    if len(a_q) >= MIN_QUESTION_CHARS:
+        entry, score = bank.match_norm(a_q, threshold)
         if entry is not None:
             hits[id(entry)] = (score, entry, a_text, a_win)
         if best_any is None or score > best_any[0]:
             best_any = (score, entry, a_text)
 
     n = len(blocks)
-    windows = []
+
     # 窗口最大 6 块:带图布局的题干在图片右侧窄栏,一行常只有几个字,
     # 需要拼更多块才能凑出完整题干。
     # 窗口最短按 MIN_QUESTION_CHARS 卡:题干被折行时,单独一块可能就是
     # 整个短题干(如"家三宝”是指"),按 6 字卡会把它直接漏掉。
-    for size in range(1, 7):
-        for i in range(n - size + 1):
-            text = "".join(b["text"] for b in blocks[i:i + size])
-            if len(core.normalize(text)) >= MIN_QUESTION_CHARS:
-                windows.append((i, size, text))
-    for i, size, text in windows[:MAX_SCAN_WINDOWS]:
-        q = core.normalize(text)
+    # 归一化在生成时就地算好(每个窗口只算一次,预筛/精匹配共用);
+    # 上限按生成顺序数到即停,不白造后面用不上的窗口。
+    def _windows():
+        made = 0
+        for size in range(1, 7):
+            for i in range(n - size + 1):
+                text = "".join(b["text"] for b in blocks[i:i + size])
+                q = core.normalize(text)
+                if len(q) < MIN_QUESTION_CHARS:
+                    continue
+                if made >= MAX_SCAN_WINDOWS:
+                    return
+                made += 1
+                yield i, size, text, q
+
+    for i, size, text, q in _windows():
         # 先用单指标低成本预筛,通过后再三指标精匹配
         pre = bank.prefilter(q, int(threshold) - 15)
         if pre is None:
@@ -132,7 +154,7 @@ def fullscan_find(bank, blocks: list, threshold: float,
         pre_score, pre_entry = pre
         if best_any is None or pre_score > best_any[0]:
             best_any = (pre_score, pre_entry, text)
-        entry, score = bank.match(text, threshold)
+        entry, score = bank.match_norm(q, threshold)
         if entry is None:
             continue
         prev = hits.get(id(entry))
@@ -141,9 +163,9 @@ def fullscan_find(bank, blocks: list, threshold: float,
     return hits, best_any
 
 
-def resolve_fullscan(bank, blocks: list, threshold: float,
-                     recent=None, use_anchor: bool = True):
-    """把全屏命中结果聚类成"几道题"并选出答案。
+def resolve_questions(bank, blocks: list, threshold: float,
+                      recent=None, use_anchor: bool = True):
+    """把找题命中结果聚类成"几道题"并选出答案(自检/三大学士共用的匹配核心)。
 
     recent: 最近答过的题目(归一化文本)列表;其中的题目再次出现视为回声
     (聊天/日志残留),多题时会被忽略。
@@ -155,8 +177,8 @@ def resolve_fullscan(bank, blocks: list, threshold: float,
     """
     from rapidfuzz import fuzz
 
-    hits, best_any = fullscan_find(bank, blocks, threshold,
-                                   use_anchor=use_anchor)
+    hits, best_any = find_questions(bank, blocks, threshold,
+                                    use_anchor=use_anchor)
     if not hits:
         # n==0 时把最高候选塞进 score/note,便于日志诊断
         best_score = best_any[0] if best_any else 0.0
@@ -416,8 +438,8 @@ def scan_rewards(blocks) -> dict:
 class RewardTally:
     """当天答题收益:银两 / 经验 / 物品(种类 + 件数),按天累计、跨启动保留。
 
-    界面(Tk 线程)会来读 summary / round_lines,科举线程同时在跑 feed:
-    不加锁就会撞上"遍历字典时它变了"(RuntimeError),界面那一拍收益不刷新。
+    读的人(`--rewards`,可与 GUI 并用)会和科举线程的 feed 并发:
+    不加锁就会撞上"遍历字典时它变了"(RuntimeError),读到的账目也是半截。
     读/写各自进这把锁,粒度只包住自己这几个办法,不碰工具线程的循环。
     用 RLock 是因为 feed() 内部还要调 rollover()/save(),普通 Lock 会自锁。
     """
@@ -493,11 +515,11 @@ class RewardTally:
         return grew
 
     def feed(self, blocks, slot=1) -> list[str]:
-        """喂一轮 OCR 结果,返回本帧新计入的说明(给日志/界面用)。
+        """喂一轮 OCR 结果,返回本帧新计入的说明(进日志)。
 
         slot: 这条画面属于哪个客户端(槽位号 1~5)。多开时每个客户端各算各的
         "单轮收益",互不串账;落轮提示("共用时X分Y秒")也只结自己这一轮的账。
-        整段进锁:界面同时在读 summary/round_lines,不能读到写了一半的状态。
+        整段进锁:`--rewards` 等读方可能同时在读,不能读到写了一半的状态。
         """
         with self._lock:
             return self._feed(blocks, slot)
@@ -552,7 +574,7 @@ class RewardTally:
         return news
 
     def summary(self) -> str:
-        """给界面看的一行:当天累计(银两 / 经验 / 物品种类数 + 明细)。"""
+        """给 `--rewards` 看的一行:当天累计(银两 / 经验 / 物品种类数 + 明细)。"""
         with self._lock:
             if not (self.exp or self.silver or self.items):
                 return "今日收益: 还没有记录(答题过程中会自动统计)"
@@ -602,30 +624,6 @@ class RewardTally:
             return lines
 
 
-def reward_earn_text(silver) -> str:
-    """总收益那一行(界面按要求的格式只显示银两)。"""
-    return f"收益：{int(silver or 0)}两"
-
-
-def reward_round_lines(rounds) -> list[str]:
-    """收益明细:每一轮的用时/银两/物品(界面明细窗用它)。"""
-    out = []
-    for r in rounds or []:
-        sec = max(0, int(r.get("sec") or 0))
-        items = "、".join(f"{k}×{v}"
-                         for k, v in (r.get("items") or {}).items()) or "无"
-        mark = "达标" if r.get("pass") else "超时"
-        out.append(f"{r.get('slot') or '?'}号  {r.get('ts') or ''}  用时 "
-                   f"{sec // 60}分{sec % 60}秒({mark})  银两 "
-                   f"{int(r.get('silver') or 0):,}  物品 {items}")
-    return out
-
-
-def _empty_stats() -> dict:
-    """本局统计的初值:建工具和重置统计都从这儿取,字面量只留这一份。"""
-    return {"n": 0, "resp_sum": 0.0, "unmatched": 0}
-
-
 class KejuTool(threading.Thread):
     """题目对话框区域 -> 答案(语音 + 迷你窗)。"""
 
@@ -637,9 +635,8 @@ class KejuTool(threading.Thread):
         self._screen = screen          # 取引擎的截图封装(基础设施)
         self._ocr = ocr                # 取 OCR 封装(基础设施)
         self.enabled = False           # 由 refresh_tools() 按"进了哪个功能"开关
-        self.watching = False          # 自动监听开关(自己的,别人不碰)
+        self.watching = True           # 自动监听默认开(没有界面开关,定位到即接管)
         self.recent_answered: dict[str, float] = {}  # 归一化题干 -> 答题时间
-        self.round_stats = _empty_stats()
         self._miss_streak = 0
         self._nomatch_streak = 0
         self._nomatch_near = 0.0       # 最近一次漏答时"最接近的候选"分数
@@ -657,11 +654,10 @@ class KejuTool(threading.Thread):
         # 区域接过来,自动跟随不断线)
         boxes = [list(r) for r in (self.cfg("regions") or []) if r]
         self._auto_boxes = boxes or None
+        self._client_names: list = []   # 各槽位的角色名(抠自窗口标题,见 set_auto_boxes)
         self._follow_ts = 0.0          # 上次检查客户端有没有挪窝
-        self._manual_fs = False        # 这一次全屏扫描是不是手动按的
         self._req_cycle = False        # 有待办:手动识别(界面按的)
         self._req_force = True         # 手动识别一律 force=True
-        self._req_fullscan = False     # 有待办:全屏扫描(界面按的)
         self._halt = threading.Event()
         self._wake = threading.Event()
 
@@ -682,20 +678,6 @@ class KejuTool(threading.Thread):
     def deactivate(self):
         self.enabled = False
 
-    def reset(self):
-        """进入 / 退出这个功能时调用:上次的题目和画面记忆全部作废。
-
-        recent_answered 用整本换掉而不是 clear():界面线程调 reset 的同时
-        科举线程可能正在遍历它(_remember_answered 找最旧那条),clear 会
-        让迭代撞 RuntimeError;换引用是原子的,旧字典留给正在遍历的人用完。
-        """
-        self.recent_answered = {}
-        self.reset_stats()
-        self.forget_region_memory()
-        self._miss_streak = self._nomatch_streak = self._no_region_streak = 0
-        self._last_announce_ts = 0.0
-        self._req_cycle = self._req_fullscan = False   # 离开时的待办不再执行
-
     def stop(self):
         self._halt.set()
         self._wake.set()
@@ -711,16 +693,6 @@ class KejuTool(threading.Thread):
         self._req_cycle = True
         self._wake.set()
 
-    def request_fullscan(self):
-        """投递一次全屏扫描(界面上的「全屏扫描」走这里,同样不受 watching 限制)。"""
-        self._req_fullscan = True
-        self._manual_fs = True          # 手动扫描必须在界面里给结果
-        self._wake.set()
-
-    def reset_stats(self):
-        """本局统计归零(界面上的「重置统计」走这里)。"""
-        self.round_stats = _empty_stats()
-
     def forget_region_memory(self, key=None):
         """忘掉各区域记住的上一题/画面指纹(区域变了,旧记忆作废)。
 
@@ -734,57 +706,59 @@ class KejuTool(threading.Thread):
             else:
                 d.pop(key, None)
 
-    def set_auto_boxes(self, boxes):
-        """记住「自动定位」当时各客户端的矩形(挪窝时按它比对是否跟随)。"""
+    def set_auto_boxes(self, boxes, names=None):
+        """记住「自动定位」当时各客户端的矩形与角色名(挪窝时按它比对/跟随)。
+
+        names 与 boxes 一一对应,是标题里抠出来的角色名(core.client_name);
+        不足 MAX_CLIENTS 的槽位补 None。只传 boxes(如清空)时名字一并清掉。
+        """
+        import core
         self._auto_boxes = ([[int(v) for v in b] for b in boxes]
                             if boxes else None)
+        names = list(names or [])
+        self._client_names = (names + [None] * core.MAX_CLIENTS
+                              )[:core.MAX_CLIENTS]
+
+    def drop_client(self, i):
+        """界面上胶囊 × 删掉第 i 个槽位的客户端(工具侧的收尾)。
+
+        从跟随基准和角色名里把这一位去掉(整体前移,和界面里区域列表的
+        删法一致),那一格的画面/题目记忆一并作废。必须在界面改写配置里
+        的 regions **之前**调:这里要按旧配置数出它是紧凑表里的第几个 box。
+        """
+        import core
+        regions = [r for r in (self.cfg("regions") or [])][:core.MAX_CLIENTS]
+        regions += [None] * (core.MAX_CLIENTS - len(regions))
+        if not regions[i]:
+            return
+        k = sum(1 for r in regions[:i] if r)   # 前面非空的个数 = 紧凑表下标
+        if self._auto_boxes and 0 <= k < len(self._auto_boxes):
+            self._auto_boxes = (self._auto_boxes[:k]
+                                + self._auto_boxes[k + 1:]) or None
+        if 0 <= i < len(self._client_names):
+            self._client_names.pop(i)
+        self.forget_region_memory(key=tuple(regions[i]))
 
     # ---- 自己的配置 ----
     def cfg(self, key, default=None):
-        """自己的配置只在 keju 分区取:铃铛的设置这里看不到。"""
+        """自己的配置只在 keju 分区取。"""
         return (self.app.cfg.get("keju") or {}).get(key, default)
-
-    def interval(self):
-        return self._poll_interval()
 
     # ---- 只读状态口:gui 只认这个口,不摸下面的字段 ----
     def ui_state(self):
-        """界面刷新要的只读快照:本局统计 + 今日收益(银两/物品/逐轮明细)。
-
-        收益都是现算的(rollover 顺带做了跨天清零);给的是拷贝,界面读到的
-        永远不是写了一半的状态。谁坏了就空着,别拖垮刷新。
-        """
-        stats = dict(self.round_stats) if isinstance(self.round_stats, dict) else {}
-        silver, items, rounds = 0, [], []
-        try:
-            rt = self.rewards
-            rt.rollover()
-            silver = int(getattr(rt, "silver", 0) or 0)
-            items = sorted(((k, int(v)) for k, v in (rt.items or {}).items()),
-                           key=lambda kv: -kv[1])
-            rounds = [dict(r) for r in (rt.rounds or [])]
-        except Exception:
-            silver, items, rounds = 0, [], []
-        return {"stats": stats, "silver": silver, "items": items,
-                "rounds": rounds}
+        """界面刷新要的只读快照:各槽位的角色名(客户端胶囊显示用)。"""
+        return {"names": list(self._client_names)}
 
     def _run_pending(self) -> bool:
-        """有待办就一起办掉:手动识别 / 全屏扫描,办过事返回 True。
+        """有待办就办掉:目前只有手动识别一种,办过事返回 True。
 
         这是"手动任务只在自己线程里跑"的落点:界面点一下 = 置待办 + 唤醒,
-        绝不从别的线程直接调识别。两个待办一次取干净,免得按钮点得快时
-        后来的任务把先前那次饿死。
-        **手动识别先办**:全屏扫描失败还要等 1 秒重试,先办扫描会把用户紧接
-        着点的那次「手动识别」整体往后推一秒多(实测 1.03s)。
+        绝不从别的线程直接调识别。
         """
         did = False
         if self._req_cycle:
             self._req_cycle = False
             self.keju_cycle(self._req_force)
-            did = True
-        if self._req_fullscan:
-            self._req_fullscan = False
-            self.fullscan()
             did = True
         return did
 
@@ -802,88 +776,12 @@ class KejuTool(threading.Thread):
                 t0 = time.time()
                 self.keju_cycle(False)
                 # 睡到下一轮;期间来了待办/状态变化会被唤醒,立刻回到循环开头
-                self._wake.wait(timeout=max(0.0, self.interval()
+                self._wake.wait(timeout=max(0.0, self._poll_interval()
                                             - (time.time() - t0)))
                 self._wake.clear()
             except Exception as e:              # 自己扛异常,不牵连别的功能
-                self.app.log(f"[{TAG}]出错: {e}", ui=False)
+                self.app.log(f"[{TAG}]出错: {e}")
                 self._halt.wait(0.2)            # 出错这一轮别空转
-
-    # ---- 全屏扫描(手动按钮触发;也用于找题定位) ----
-    def fullscan(self):
-        """全屏扫描:找题播报。不改动任何区域设置。找不到自动重试一次。
-
-        重试前的那 1 秒不白等:先扫一遍已定位的区域(手动扫描期间新弹的题不会漏)。
-        """
-        manual = bool(getattr(self, "_manual_fs", False))
-        n = self._fullscan_once()
-        if n == 0:
-            self.app.log("[全屏扫描]失败,1 秒后自动重试一次…", ui=manual)
-            t0 = time.time()
-            if [r for r in (self.cfg("regions") or []) if r]:
-                self.keju_cycle(False)     # 用等待时间看一眼区域
-            time.sleep(max(0.0, 1.0 - (time.time() - t0)))
-            # 第一次扫描已经把标志消费掉了:重试那次也得按手动对待,
-            # 否则失败提示 ui=False,用户在界面上一声不响(回归)
-            self._manual_fs = manual
-            self._fullscan_once()
-
-    def _fullscan_once(self):
-        import core
-        manual = getattr(self, "_manual_fs", False)
-        self._manual_fs = False
-        t0 = time.time()
-        try:
-            img = self.screen.grab()
-        except Exception as e:
-            self.app.log(f"[全屏扫描]截图失败: {e}", ui=manual)
-            return 0
-        _o0 = time.time()
-        blocks = self.ocr.recognize_blocks(img)
-        _t_ocr = time.time() - _o0
-        if not blocks:
-            # 手动扫描必须在界面里给出结果
-            self.app.log("[全屏扫描]未识别到任何文字", ui=manual)
-            return 0
-        fs_thresh = self._match_floor()
-        _m0 = time.time()
-        n_questions, entry, score, note, _ = resolve_fullscan(
-            self.app.bank, blocks, fs_thresh, recent=self._recent_list(),
-            use_anchor=bool(self.cfg("exam_mode", True)))
-        _t_match = time.time() - _m0
-        elapsed = time.time() - t0
-        if n_questions == 0:
-            detail = f",最高 {score:.0f}% {note}" if score > 0 else ""
-            self.app.log(f"[全屏扫描]屏幕未认出科举题目"
-                         f"({elapsed:.1f}s{detail})", ui=manual)
-            return 0
-        if n_questions >= 2:
-            self.app.log(f"[全屏扫描]发现 {n_questions} 道题目(在 {elapsed:.1f}s 内),"
-                         f"{core.SAY_MULTI_QUESTION}")
-            self.app.speaker.say(core.SAY_MULTI_QUESTION)
-            return 2
-        self.app.log(f"[全屏扫描]匹配 {score:.0f}%{note} -> "
-                     f"{entry['q'][:16]}… 【{entry['a']}】"
-                     f"| 响应 {elapsed:.2f}s",
-                     detail=f" (OCR {_t_ocr:.2f}s 匹配 {_t_match:.2f}s)")
-        t_ans = self.recent_answered.get(entry["n"])
-        if t_ans and time.time() - t_ans < REPEAT_GUARD_S and not manual:
-            # 只约束自动轮询防止连播;手动按的扫描就是要重听
-            self.app.log(f"[全屏扫描]该题 {REPEAT_GUARD_S} 秒内已播报过,"
-                         "跳过(再点一次可重听)")
-            record_event("dup")
-            return 1
-        # 真播报了才记 match:重复抑制那次只算 dup,别让 --stats 两头各记一笔
-        record_event("match", score=round(score), note=note.strip(),
-                     answer=entry["a"], response=round(elapsed, 2),
-                     ocr=round(_t_ocr, 2), match=round(_t_match, 2),
-                     manual=manual)
-        self._remember_answered(entry)
-        self.app.last_answer = entry["a"]
-        self.app.speaker.say(entry["a"])
-        self._last_announce_ts = time.time()
-        self._record_stat(time.time() - t0)
-        return 1
 
     def _remember_answered(self, entry):
         # 整个会话期记住已答过的题,抑制聊天窗口/日志里的题干回声
@@ -895,16 +793,11 @@ class KejuTool(threading.Thread):
     def _recent_list(self):
         return list(self.recent_answered)
 
-    def _record_stat(self, resp: float):
-        st = self.round_stats
-        st["n"] += 1
-        st["resp_sum"] += max(0.0, resp)
-
     def _poll_interval(self) -> float:
         """自适应轮询。
 
         - 刚播报过(<12 秒):下一题随时会来,固定 0.1 秒快扫
-        - 长时间没有题目:按界面设置的空闲间隔(≥0.4 秒)降频省 CPU
+        - 长时间没有题目:按配置里的空闲间隔(≥0.4 秒)降频省 CPU
         画面没变化时并不跑 OCR,所以空闲间隔主要省的是截图+比对的固定开销。
         """
         import core
@@ -944,7 +837,7 @@ class KejuTool(threading.Thread):
         返回 (题干文本, 题干块下标集合或None, 预匹配结果或None)。
         """
         thr = self._match_floor()
-        hits, _ = fullscan_find(self.app.bank, rblocks, thr, use_anchor=False)
+        hits, _ = find_questions(self.app.bank, rblocks, thr, use_anchor=False)
         if hits:
             sc, en, tx, win = max(hits.values(), key=lambda v: v[0])
             return tx, win, (en, sc)
@@ -954,16 +847,15 @@ class KejuTool(threading.Thread):
         import core
         from rapidfuzz import fuzz
 
-        def olog(msg, ui=True, detail=""):
+        def olog(msg, detail=""):
             """cycle 的日志带操作前缀:手动那次 [手动识别];监听中 [自动监听];
-            监听关着时(全屏扫描失败后顺手看一眼)标 [检测],
-            免得让人以为自动监听还在跑。detail 只写文件、界面不显示。
+            监听关着时手动识别也照扫,标 [检测],免得让人以为自动监听还在跑。
             """
             if force:
                 tag = "手动识别"
             else:
                 tag = "自动监听" if self.watching else "检测"
-            self.app.log(f"[{tag}]{msg}", ui=ui, detail=detail)
+            self.app.log(f"[{tag}]{msg}", detail=detail)
 
         # 客户端挪窝了就先把区域跟过去,再按区域截图
         self._follow_clients()
@@ -972,23 +864,25 @@ class KejuTool(threading.Thread):
         regions = [(i + 1, r) for i, r in
                    enumerate(self.cfg("regions") or []) if r]
         if not regions:
-            # 没有区域:不再自动全屏扫描(全屏扫描只由按钮手动触发),
-            # 提示一次并暂停自动监听,免得"看着在监听、其实每轮都在全屏扫"
+            # 没有区域:直接不扫(手动也不扫),提示 + 暂停自动监听
             self._no_region_streak += 1
             if force or self._no_region_streak == 1:
-                olog("还没有定位到客户端 —— 启动游戏后点「自动定位客户端」")
+                olog("还没有定位到客户端 —— 点「客户端刷新」定位后再识别")
             if self.watching:
                 self.watching = False
-                olog("没有定位到客户端,已暂停(定位后重新点「自动监听」)")
+                olog("没有定位到客户端,已暂停(定位后自动接管)")
             return
         self._no_region_streak = 0
         found_text = False
         _t_cycle0 = time.time()
+        exam_mode = bool(self.cfg("exam_mode", True))
         for slot, region in regions:
             x1, y1, x2, y2 = region
             key = tuple(region)
             try:
-                crop = self.screen.grab((x1, y1, x2, y2))  # 只截区域,~5ms
+                # 三大学士只扫底部对话框带(整窗其余全是噪声);御前科举整窗
+                crop = self.screen.grab(region if exam_mode
+                                        else plain_band(x1, y1, x2, y2))
             except Exception as e:
                 olog(f"截图失败: {e}")
                 return
@@ -1006,11 +900,11 @@ class KejuTool(threading.Thread):
             # 顺手统计奖励(银两/经验/物品):跟题目识别无关,两种模式都算
             try:
                 for gain in self.rewards.feed(rblocks, slot):
-                    self.app.log(f"[奖励]{gain}", ui=False)
+                    self.app.log(f"[奖励]{gain}")
             except Exception:
                 pass
             # 两套解析逻辑,按模式选择(互不干扰)
-            if bool(self.cfg("exam_mode", True)):
+            if exam_mode:
                 parsed = self._parse_keju(rblocks)
             else:
                 parsed = self._parse_plain(rblocks)
@@ -1018,15 +912,15 @@ class KejuTool(threading.Thread):
                 # 御前科举模式下未找到锚点:当前区域不是该界面
                 if force:
                     olog("读到文字但没认出科举题目:"
-                                 f"{' '.join(b['text'] for b in rblocks)[:24]}…"
-                                 "(可切「三大学士」模式试试)")
+                         f"{' '.join(b['text'] for b in rblocks)[:24]}…"
+                         "(可切「三大学士」模式试试)")
                 continue
             bare, qwin, pre = parsed
             n = core.normalize(bare)
             if len(n) < MIN_QUESTION_CHARS:
                 if force:
                     olog(f"读到的文字太碎,凑不出题干(仅 {len(n)} 字):"
-                                 f"{bare[:20]}…")
+                         f"{bare[:20]}…")
                 continue  # 碎片文字(如单个"是"),不可能是完整题干
             last = self._region_last.get(key, "")
             if not force and last and fuzz.ratio(n, last) >= 88:
@@ -1059,11 +953,8 @@ class KejuTool(threading.Thread):
             if pre is None:
                 entry, score, note = self.app.bank.pick_with_options(
                     candidates, options_text)
-            # 考官开场白("这里是御前科举大赛第N关…你作好答题的准备了吗？")
-            # 不是题目:自动轮询时从界面日志静默掉,省得刷屏;
-            # 手动识别(force)是你主动要的结果,照旧显示。
-            olog(f"识别: {bare[:30]}…",
-                         ui=force or not is_exam_prompt(bare))
+            # 考官开场白已在前面拦下,这里写进日志的都是真读到的题干
+            olog(f"识别: {bare[:30]}…")
             if entry:
                 t_ans = self.recent_answered.get(entry["n"])
                 if (not force and t_ans
@@ -1073,6 +964,7 @@ class KejuTool(threading.Thread):
                     record_event("dup")
                     continue
                 self._remember_answered(entry)
+                self.app.last_question = entry["q"]
                 self.app.last_answer = entry["a"]
                 _t_match = time.time() - _t_m0
                 t_det = self._region_t_detect.get(key, _t_cycle0)
@@ -1087,12 +979,10 @@ class KejuTool(threading.Thread):
                              manual=bool(force))
                 self.app.speaker.say(entry["a"])
                 self._last_announce_ts = time.time()
-                self._record_stat(_t_resp)
                 self._nomatch_streak = 0
                 return  # 本轮已播报
             self._nomatch_streak += 1
             if self._nomatch_streak == 1:
-                self.round_stats["unmatched"] += 1
                 # 没答出的这一刻才算一次"最接近的候选":分数接近=真题没收录
                 # (值得补题库),分数很低=屏幕上根本不是题(聊天/任务栏)
                 self._nomatch_near = self.app.bank.closest(bare)
@@ -1102,9 +992,9 @@ class KejuTool(threading.Thread):
                     or self._nomatch_streak % 10 == 0):
                 suffix = (f"(连续{self._nomatch_streak}次)"
                           if self._nomatch_streak > 1 else "")
-                # 手动识别必须看到结果,自动轮询只写文件(界面别刷屏)
+                # 同一次漏答只在第 1 次和每 10 次打一行,别刷屏
                 olog(f"题库中未找到匹配(最高 {self._nomatch_near:.0f}%)"
-                             f"{suffix}", ui=force)
+                     f"{suffix}")
             if self._nomatch_streak == 1:
                 # 像题目但分数不够:界面提示一声,并记到"疑似未收录"清单
                 # (连当屏的选项一起记,事后 --uncollected 就能直接填答案)
@@ -1120,8 +1010,8 @@ class KejuTool(threading.Thread):
             if force or self._miss_streak == 1 or self._miss_streak % 15 == 0:
                 suffix = (f"(连续{self._miss_streak}次)"
                           if self._miss_streak > 1 else "")
-                olog("题目对话框里没读到文字(题目未出现)"
-                     + suffix, ui=force)
+                # 同一轮空屏只在第 1 次和每 15 次打一行,别刷屏
+                olog("题目对话框里没读到文字(题目未出现)" + suffix)
             if self._miss_streak == 1:
                 record_event("blind")
         else:
@@ -1131,7 +1021,8 @@ class KejuTool(threading.Thread):
         """客户端被挪动/换了分辨率:自动定位来的区域跟着更新。
 
         每秒最多查一次窗口;客户端最小化/关掉会让数量变化,那时宁可不跟,
-        免得把别的槽位弄丢。
+        免得把别的槽位弄丢。不支持的分辨率档(640×480 / 860×600 之外)
+        不在跟随范围:改大后被滤掉,数量对不上就不跟,等下次定位收口。
         """
         import core
         now = time.time()
@@ -1144,12 +1035,15 @@ class KejuTool(threading.Thread):
             found, _minimized = core.find_client_windows()
         except Exception:
             return
+        found = [(t, b) for t, b in found if core.client_supported(b)]
         boxes = [[int(v) for v in b] for _t, b in found[:core.MAX_CLIENTS]]
         if boxes == self._auto_boxes:
             return
         if not core.can_follow_clients(boxes, self._auto_boxes):
             return
-        self._auto_boxes = boxes
+        names = [core.client_name(t)
+                 for t, _b in found[:core.MAX_CLIENTS]]   # 跟随时名字一并刷新
+        self.set_auto_boxes(boxes, names)
         mine = self.app.cfg.setdefault("keju", {})
         mine["regions"] = boxes + [None] * (core.MAX_CLIENTS - len(boxes))
         self.forget_region_memory()            # 位置变了,旧的画面/题目记忆全作废
@@ -1172,7 +1066,8 @@ class KejuTool(threading.Thread):
         g = crop.mean(axis=2).astype("int16")
         prev = self._region_frame.get(key)
         ref = self._region_ref.get(key)
-        if ref is not None and diff(g, ref) > 4.0:
+        d = diff(g, ref) if ref is not None else None    # 差值一次算好,下面共用
+        if d is not None and d > 4.0:
             self._region_dirty.setdefault(key, now)   # 本轮变化起点
         self._region_frame[key] = g
 
@@ -1181,7 +1076,7 @@ class KejuTool(threading.Thread):
             self._region_ocr_ts[key] = now
             self._region_t_detect[key] = now
             return True
-        if diff(g, ref) <= 4.0:                # 与上次OCR画面一致:无新内容
+        if d <= 4.0:                           # 与上次OCR画面一致:无新内容
             if now - self._region_ocr_ts.get(key, 0) > 15:
                 # 复检过就把时钟拨回去:不然后面每轮都判"离上次 OCR 很久了",
                 # 门控对这个区域就永久失效,静止画面也会一直 OCR

@@ -38,8 +38,9 @@ from core import (Ocr, edge_params, load_config, normalize,
                   _voice_cache_path)
 # 科举的匹配/收益统计在 tools/keju.py,这里按它的位置取
 from tools import keju as tools_keju
-from tools.keju import (RewardTally, resolve_fullscan, scan_rewards,
+from tools.keju import (RewardTally, resolve_questions, scan_rewards,
                         strip_exam_header)
+from ui import keju as ui_keju          # 主窗布局(确认已删的函数不在了)
 from ui import widgets as ui_widgets   # 窗口摆位/动效
 
 # 全程把事件文件指到临时目录:下面成片的识别用例会真写 match/nomatch 事件,
@@ -482,13 +483,6 @@ def sec_update_bank():
             no_app = True
         check("官方源:页面结构变化抛错(交给备源)", no_app)
 
-    with patch(_http_get=fake_official()):
-        check("official_chunk_hash:轻量检查读出版本号",
-              bank_mod.official_chunk_hash() == "deadbeef")
-    with patch(_http_get=raiser(OSError("断网"))):
-        check("official_chunk_hash:断网返回空串(静默跳过)",
-              bank_mod.official_chunk_hash() == "")
-
     def fake_gh(path, timeout=30):
         if path == "data/current.json":
             return json.dumps({"generation_id": "g1"}).encode()
@@ -626,7 +620,7 @@ def sec_voice():
             return _voice_cache_path(text, cfg["app"]["voice_hint"], rate, vol,
                                      pitch)
 
-        valid = [cpath(a) for a in ("甲答", "乙答", "请保证屏幕里只有一个题目",
+        valid = [cpath(a) for a in ("甲答", "乙答",
                                     "语音测试,C铁观音,唐朝")]
         for p in valid:
             with open(p, "wb") as f:
@@ -805,16 +799,11 @@ def mk_engine(bank, blocks, cfg=None, crops=None):
     app.bank = bank
     app.said = []
     app.last_answer = ""
-    app.logs = []            # 界面滚动框会显示的(ui=True)
-    app.logs_all = []        # 全部日志(含只写文件的),带 ui 标记
-
-    def _log(msg, ui=True, detail="", ui_text=None):
-        app.logs_all.append((msg, ui))
-        if ui:
-            app.logs.append(msg)
+    # 界面滚动框没了,日志只有落文件的一份;两个名字都留着,旧用例不折腾
+    app.logs = app.logs_all = []
 
     app.speaker = types.SimpleNamespace(say=app.said.append)
-    app.log = _log
+    app.log = lambda msg, detail="": app.logs.append(msg)
     eng.screen = FakeScreen(crops)
     eng.ocr = types.SimpleNamespace(recognize_blocks=lambda img, **kw: blocks)
     eng.keju_tool = tools_keju.KejuTool(app, lambda: eng.screen,
@@ -842,54 +831,54 @@ def sec_pipeline():
     QD = "下列哪种茶叶不属于绿茶"
     AN = normalize(QA)
 
-    n, entry, score, note, win = resolve_fullscan(bank, [blk(QA, 100, 200)], 62)
+    n, entry, score, note, win = resolve_questions(bank, [blk(QA, 100, 200)], 62)
     check("滑窗:单题命中并给出窗口下标",
           n == 1 and entry["a"] == "答案甲" and win == [0], f"{score:.0f}% win={win}")
 
-    n, entry, _, _, _ = resolve_fullscan(
+    n, entry, _, _, _ = resolve_questions(
         bank, [blk(QA, 100, 200), blk(QB, 100, 600)], 62)
     check("滑窗:两处不同题 -> 判为两道题(要求屏幕只留一道)", n == 2)
 
-    n, entry, _, note, _ = resolve_fullscan(
+    n, entry, _, note, _ = resolve_questions(
         bank, [blk(QA, 100, 200), blk(QB, 100, 240)], 62)
     check("滑窗:纵向位置相近的命中聚成一道题(匹配到邻居题)",
           n == 1 and entry is not None and "近重复题干" in note, note.strip())
 
-    n, entry, _, note, _ = resolve_fullscan(
+    n, entry, _, note, _ = resolve_questions(
         bank, [blk(QC, 100, 200), blk(QD, 100, 700)], 62)
     check("滑窗:近重复题干算一道题(不误报多题)",
           n == 1 and entry["a"] == "答案丙" and "近重复题干" in note,
           f"{entry['a']} {note.strip()}")
 
     # 窄栏排版:最后一行"类"被单独切出去,于是两个窗口分别命中 C / D 两条近重复题干
-    n, entry, _, note, _ = resolve_fullscan(
+    n, entry, _, note, _ = resolve_questions(
         bank, [blk(QD, 100, 200), blk("类", 100, 232),
                blk("A 答案丁 B 无关文字", 100, 600)], 62)
     check("滑窗:近重复题干 + 屏幕上有选项 -> 按选项消歧",
           n == 1 and entry["a"] == "答案丁" and "按选项消歧" in note,
           f"{entry['a']} {note.strip()}")
 
-    n, entry, _, note, _ = resolve_fullscan(
+    n, entry, _, note, _ = resolve_questions(
         bank, [blk(QA, 100, 200, h=60), blk(QB, 100, 700, h=28)], 62)
     check("滑窗:多题时取字号最大的一道(小字多为聊天残留)",
           n == 1 and entry["a"] == "答案甲" and "字号最大" in note, note.strip())
 
-    n, entry, _, note, _ = resolve_fullscan(
+    n, entry, _, note, _ = resolve_questions(
         bank, [blk(QA, 100, 200), blk(QB, 100, 600)], 62, recent=[AN])
     check("滑窗:回声抑制(刚答过的题不再当作新题)",
           n == 1 and entry["a"] == "答案乙" and "回声" in note, note.strip())
 
-    n, _, _, _, _ = resolve_fullscan(
+    n, _, _, _, _ = resolve_questions(
         bank, [blk(QA, 100, 200), blk(QB, 100, 600)], 62, recent=[AN, normalize(QB)])
     check("滑窗:两道题都是回声时保持多题(交给字号/手动判断)", n == 2)
 
-    n, entry, score, note, _ = resolve_fullscan(
+    n, entry, score, note, _ = resolve_questions(
         bank, [blk("第一道题的题干内容是啥", 100, 200)], 100)
     check("滑窗:没到阈值也记录最高候选(便于日志定位)",
           n == 0 and entry is None and score > 0 and "最高候选" in note,
           f"{score:.0f}% {note}")
 
-    n, _, score, note, _ = resolve_fullscan(
+    n, _, score, note, _ = resolve_questions(
         bank, [blk("zxcvbnmlkjhgfd", 100, 200)], 100)
     check("滑窗:连候选都没有时保持干净(无最高候选)",
           n == 0 and score == 0.0 and note == "")
@@ -942,24 +931,24 @@ def sec_pipeline():
 
     # 活动公告含“御前科举大赛”但不是题目:可以拿来试匹配,但绝不能到阈值
     chat = blk("每到御前科举大赛，各族才子齐聚长安城一试身手", 100, 200)
-    hits_chat, best_chat = tools_keju.fullscan_find(bank, [chat], 80, use_anchor=True)
+    hits_chat, best_chat = tools_keju.find_questions(bank, [chat], 80, use_anchor=True)
     check("锚点:公告/聊天不能配出答案(低于阈值不播报)",
           not hits_chat and (best_chat is None or best_chat[0] < 80),
           f"{best_chat[0]:.0f}%" if best_chat else "无候选")
 
-    hits, best_any = tools_keju.fullscan_find(bank, [blk(hdr + QA, 100, 200)], 62,
+    hits, best_any = tools_keju.find_questions(bank, [blk(hdr + QA, 100, 200)], 62,
                                         use_anchor=True)
-    check("fullscan_find:锚点路径命中(win 就是锚点窗口)",
+    check("find_questions:锚点路径命中(win 就是锚点窗口)",
           len(hits) == 1 and next(iter(hits.values()))[3] == [0])
-    hits2, _ = tools_keju.fullscan_find(bank, [blk(QA, 100, 200)], 62, use_anchor=True)
-    check("fullscan_find:没有锚点时滑窗仍能命中", len(hits2) == 1)
-    hits3, best3 = tools_keju.fullscan_find(bank, [blk("完全无关的一段文字内容", 100, 200)],
+    hits2, _ = tools_keju.find_questions(bank, [blk(QA, 100, 200)], 62, use_anchor=True)
+    check("find_questions:没有锚点时滑窗仍能命中", len(hits2) == 1)
+    hits3, best3 = tools_keju.find_questions(bank, [blk("完全无关的一段文字内容", 100, 200)],
                                       62, use_anchor=False)
-    check("fullscan_find:毫无关系 -> 没有命中也没有最高候选",
+    check("find_questions:毫无关系 -> 没有命中也没有最高候选",
           not hits3 and best3 is None, f"best={best3}")
-    hits4, best4 = tools_keju.fullscan_find(bank, [blk("第一道题的题干内容是啥", 100, 200)],
+    hits4, best4 = tools_keju.find_questions(bank, [blk("第一道题的题干内容是啥", 100, 200)],
                                       100, use_anchor=False)
-    check("fullscan_find:相似但没到阈值 -> 命中为空但留下最高候选",
+    check("find_questions:相似但没到阈值 -> 命中为空但留下最高候选",
           not hits4 and best4 is not None and best4[0] > 0,
           f"{best4[0]:.0f}% {best4[2][:10] if best4 else ''}")
 
@@ -980,7 +969,7 @@ def sec_pipeline():
 
         found = {}
         for k in (0, 304):
-            hits, _ = tools_keju.fullscan_find(real_bank, decoys(k), 65, use_anchor=False)
+            hits, _ = tools_keju.find_questions(real_bank, decoys(k), 65, use_anchor=False)
             found[k] = any(e["a"] == "玩家守则" for _, e, _, _ in hits.values())
         check("滑窗上限:304 块干扰也找得到屏幕下方的窄栏题(600→3000 回归)",
               found[0] is True and found[304] is True,
@@ -999,7 +988,7 @@ def sec_engine():
         {"q": "第一道题的题干内容是什么", "a": "答案甲"},
         {"q": "今天天气晴朗适合出门散步吗", "a": "答案乙"},
     ])
-    QA, QB = "第一道题的题干内容是什么", "今天天气晴朗适合出门散步吗"
+    QA = "第一道题的题干内容是什么"
     AN = normalize(QA)
     HDR = "御前科举大赛第1关：这一关考的是综合。题目："
     KEY = (0, 0, 60, 30)
@@ -1009,31 +998,31 @@ def sec_engine():
     eng, app = mk_engine(bank, [blk(QA, 100, 200)],
                          cfg={"keju": {"exam_mode": False}})
     eng.keju_tool.watching = False
-    eng._safe("cycle", False)
+    eng.keju_tool.keju_cycle(False)
     check("日志标签:监听关着时的自动轮询标 [检测](不冒充自动监听)",
           app.logs and all(m.startswith("[检测]") for m in app.logs),
           app.logs[:2])
     eng2, app2 = mk_engine(bank, [blk(QA, 100, 200)],
                            cfg={"keju": {"exam_mode": False}})
     eng2.keju_tool.watching = True
-    eng2._safe("cycle", False)
+    eng2.keju_tool.keju_cycle(False)
     check("日志标签:只有监听中才标 [自动监听]",
           app2.logs and all(m.startswith("[自动监听]") for m in app2.logs),
           app2.logs[:2])
     eng3, app3t = mk_engine(bank, [blk(QA, 100, 200)])
     eng3.keju_tool.watching = False
-    eng3._safe("cycle", True)
+    eng3.keju_tool.keju_cycle(True)
     check("日志标签:手动识别标 [手动识别](即使没在监听)",
           app3t.logs and all(m.startswith("[手动识别]") for m in app3t.logs),
           app3t.logs[:2])
 
     eng, app = mk_engine(bank, [blk(QA, 100, 200)])          # 没有锚点
-    eng._safe("cycle", True)
+    eng.keju_tool.keju_cycle(True)
     check("cycle:御前科举模式下没有锚点 -> 不播报(当前不是该界面)",
           not app.said and not any(m.startswith("识别") for m in app.logs))
 
     eng, app = mk_engine(bank, [blk(HDR + "短", 100, 200)])
-    eng._safe("cycle", True)
+    eng.keju_tool.keju_cycle(True)
     check("cycle:碎片文本(题干<4 字)-> 不播报", not app.said)
 
     # 短题干:题库里最短的真题只有 4 个字(实测漏答过的 "“佛家三宝”是指"),
@@ -1043,12 +1032,12 @@ def sec_engine():
         [{"q": "“佛家三宝”是指", "a": "佛、法、僧"},
          {"q": "“藕”是莲的", "a": "茎"}])
     eng, app = mk_engine(short_bank, [blk(HDR + "“佛家三宝”是指", 100, 200)])
-    eng._safe("cycle", True)
+    eng.keju_tool.keju_cycle(True)
     check("短题干:锚点模式下 6 字的真题照样播报(曾被 <8 字门槛挡掉)",
           app.said == ["佛、法、僧"], str(app.said))
     eng, app = mk_engine(short_bank, [blk("“藕”是莲的", 100, 200)],
                          cfg={"keju": {"exam_mode": False}})
-    eng._safe("cycle", True)
+    eng.keju_tool.keju_cycle(True)
     check("短题干:三大学士模式下 4 字的真题也播报",
           app.said == ["茎"], str(app.said))
     # 题干被折行时,单独一块可能就是整个短题干(5 字):窗口下限 6->4 才抓得到
@@ -1059,17 +1048,17 @@ def sec_engine():
                          [blk(HDR + "“佛", 100, 200),
                           blk("家三宝”是指", 100, 224)],
                          cfg={"keju": {"exam_mode": False}})
-    eng._safe("cycle", True)
+    eng.keju_tool.keju_cycle(True)
     check("短题干+折行:滑窗靠那 5 字的半行也能命中(窗口下限 6->4)",
           app.said == ["佛、法、僧"], str(app.said))
 
     eng, app = mk_engine(bank, [blk(HDR + QA, 100, 200)])
-    eng._safe("cycle", True)
-    check("cycle:锚点命中 -> 播报 + 记忆 + 统计",
+    eng.keju_tool.keju_cycle(True)
+    check("cycle:锚点命中 -> 播报 + 记忆",
           app.said == ["答案甲"] and app.last_answer == "答案甲"
-          and AN in eng.keju_tool.recent_answered and eng.keju_tool._region_last[KEY] == AN
-          and eng.keju_tool.round_stats["n"] == 1,
-          f"{app.said} 统计 {eng.keju_tool.round_stats['n']} 题")
+          and AN in eng.keju_tool.recent_answered
+          and eng.keju_tool._region_last[KEY] == AN,
+          f"{app.said}")
 
     calls = [0]
 
@@ -1081,61 +1070,80 @@ def sec_engine():
     changed[10:20, :] = 255                       # 画面确实变了
     eng.screen = FakeScreen([changed])
     eng.ocr = types.SimpleNamespace(recognize_blocks=counting_ocr)
-    eng._safe("cycle", False)
+    eng.keju_tool.keju_cycle(False)
     check("cycle:画面变了但题干相同(相似度≥88)-> 识别了却不重复播报",
           calls[0] == 1 and app.said == ["答案甲"], f"OCR {calls[0]} 次 {app.said}")
 
     eng, app = mk_engine(bank, [blk(HDR + QA, 100, 200)])
     eng.keju_tool.recent_answered[AN] = time.time()
-    eng._safe("cycle", False)
+    eng.keju_tool.keju_cycle(False)
     check(f"cycle:自动轮询遇到 {tools_keju.REPEAT_GUARD_S} 秒内答过的题 -> 跳过不重播",
           not app.said and any("已播过" in m for m in app.logs),
           [m for m in app.logs if "已播过" in m][:1])
-    eng._safe("cycle", True)
+    eng.keju_tool.keju_cycle(True)
     check("cycle:手动识别同一题 -> 允许重听", app.said == ["答案甲"], f"{app.said}")
 
     eng, app = mk_engine(bank, [blk(HDR + QA, 100, 200)])
     eng.keju_tool.recent_answered[AN] = time.time() - tools_keju.REPEAT_GUARD_S - 1
-    eng._safe("cycle", False)
+    eng.keju_tool.keju_cycle(False)
     check(f"cycle:超过 {tools_keju.REPEAT_GUARD_S} 秒后同一道题可以重播",
           app.said == ["答案甲"], f"{app.said}")
 
     eng, app = mk_engine(bank, [blk(QA, 100, 200)], cfg={"keju": {"exam_mode": False}})
-    eng._safe("cycle", True)
+    eng.keju_tool.keju_cycle(True)
     check("cycle:三大学士(无锚点)也能作答并标注模式",
           app.said == ["答案甲"] and any("三大学士" in m for m in app.logs),
           f"{app.said}")
 
-    # 没定位到客户端:不再自动全屏扫描(全屏扫描只能手动触发),提示 + 暂停监听
-    eng, app = mk_engine(bank, [], cfg=NO_REGIONS)
-    called = []
-    eng.keju_tool._fullscan_once = lambda: (called.append(1), 1)[1]
-    eng.keju_tool.watching = True
-    eng._safe("cycle", False)
-    check("cycle:没定位到客户端 -> 不再自动全屏扫描,给出提示并暂停监听",
-          called == [] and eng.keju_tool.watching is False
-          and any("还没有定位到客户端" in m for m in app.logs)
-          and any("已暂停" in m for m in app.logs),
-          f"全屏扫描 {len(called)} 次, watching={eng.keju_tool.watching}")
+    # 三大学士只扫底部对话框带:确认 cycle 截的就是按占比缩出来的带(非整窗)
+    eng, app = mk_engine(bank, [blk(QA, 100, 200)],
+                         cfg={"keju": {"exam_mode": False}})
+    grabbed = []
+    eng.screen.grab = lambda region=None: (
+        grabbed.append(tuple(region) if region else region),
+        np.zeros((30, 60, 3), np.uint8))[1]
+    eng.keju_tool.keju_cycle(False)
+    check("三大学士:cycle 只截底部对话框带(整窗按占比缩放,四周留余量)",
+          grabbed and grabbed[-1] == tools_keju.plain_band(0, 0, 60, 30)
+          and tools_keju.plain_band(100, 150, 800, 650) == (128, 360, 737, 515),
+          f"截了 {grabbed[-1:]} / 带函数 "
+          f"{tools_keju.plain_band(100, 150, 800, 650)}")
+    eng2, _ = mk_engine(bank, [blk(HDR + QA, 100, 200)])
+    grabbed2 = []
+    eng2.screen.grab = lambda region=None: (
+        grabbed2.append(tuple(region) if region else region),
+        np.zeros((30, 60, 3), np.uint8))[1]
+    eng2.keju_tool.watching = True
+    eng2.keju_tool.keju_cycle(False)
+    check("御前科举:仍扫整个客户端窗口(不缩放)",
+          grabbed2 and grabbed2[-1] == (0, 0, 60, 30), f"截了 {grabbed2[-1:]}")
 
     eng, app = mk_engine(bank, [], cfg=NO_REGIONS)
-    eng.keju_tool._fullscan_once = lambda: 1
-    eng._safe("cycle", True)
-    check("cycle:手动识别时没区域 -> 也要在界面给出结果",
-          any("还没有定位到客户端" in m for m in app.logs))
+    eng.keju_tool.watching = True
+    eng.keju_tool.keju_cycle(False)
+    check("cycle:没定位到客户端 -> 给出提示并暂停监听(没有全屏兜底)",
+          eng.keju_tool.watching is False
+          and any("还没有定位到客户端" in m for m in app.logs)
+          and any("已暂停" in m for m in app.logs),
+          f"watching={eng.keju_tool.watching}")
+
+    eng, app = mk_engine(bank, [], cfg=NO_REGIONS)
+    eng.keju_tool.keju_cycle(True)
+    check("cycle:手动识别没区域 -> 直接不扫(只提示)",
+          any("还没有定位到客户端" in m for m in app.logs),
+          f"{app.logs[:1]}")
 
     # 考官开场白:压根不是题目 -> 直接跳过(界面/文件都不刷"识别:"),不进匹配
     prompt = "这里是御前科举大赛第4关，你作好答题的准备了吗？开始答题我还没准备"
     eng, app = mk_engine(bank, [blk(prompt, 100, 200)],
                          cfg={"keju": {"exam_mode": False}})
-    eng._safe("cycle", False)
-    check("cycle:考官开场白自动轮询时完全不刷日志(界面和文件都没有)",
-          not any(m.startswith("识别") for m in app.logs)
-          and not any(m.startswith("识别") for m, _ in app.logs_all),
-          f"{app.logs_all[:1]}")
+    eng.keju_tool.keju_cycle(False)
+    check("cycle:考官开场白自动轮询时不刷日志",
+          not any(m.startswith("识别") for m in app.logs),
+          f"{app.logs[:1]}")
     eng, app = mk_engine(bank, [blk(prompt, 100, 200)],
                          cfg={"keju": {"exam_mode": False}})
-    eng._safe("cycle", True)
+    eng.keju_tool.keju_cycle(True)
     check("cycle:手动识别考官开场白 -> 明说“这是开场对话,不是题目”",
           any("考官开场对话" in m for m in app.logs),
           [m for m in app.logs if "开场" in m][:1])
@@ -1151,7 +1159,7 @@ def sec_engine():
     for mode in (True, False):
         eng, app = mk_engine(trap, [blk(prompt, 100, 200)],
                              cfg={"keju": {"exam_mode": mode}})
-        eng._safe("cycle", True)          # 连手动识别也不能报
+        eng.keju_tool.keju_cycle(True)          # 连手动识别也不能报
         check(f"回归:考官开场白不会被误配成“乡试”({'锚点' if mode else '普通'}模式)",
               not app.said
               and any("考官开场对话" in m for m in app.logs), f"{app.said}")
@@ -1159,18 +1167,18 @@ def sec_engine():
     # 手动识别:读到文字但凑不出题干 / 没匹配上,都必须有可见结果
     eng, app = mk_engine(bank, [blk("短", 100, 200)],
                          cfg={"keju": {"exam_mode": False}})
-    eng._safe("cycle", True)
+    eng.keju_tool.keju_cycle(True)
     check("cycle:手动识别读到碎片文字 -> 界面给出原因",
           not app.said and any("凑不出题干" in m for m in app.logs),
           [m for m in app.logs if "题干" in m][:1])
     eng, app = mk_engine(bank, [blk("完全无关的一段文字内容", 100, 200)],
                          cfg={"keju": {"exam_mode": False}})
-    eng._safe("cycle", True)
+    eng.keju_tool.keju_cycle(True)
     check("cycle:手动识别没匹配上 -> 界面给出结果",
           not app.said and any("未找到匹配" in m for m in app.logs),
           [m for m in app.logs if "未找到匹配" in m][:1])
     eng, app = mk_engine(bank, [blk(QA, 100, 200)])       # 御前科举模式 + 无锚点
-    eng._safe("cycle", True)
+    eng.keju_tool.keju_cycle(True)
     check("cycle:手动识别没认出科举题目 -> 提示切三大学士模式(不提锚点)",
           any("没认出科举题目" in m and "三大学士" in m for m in app.logs)
           and not any("锚点" in m for m in app.logs),
@@ -1230,22 +1238,6 @@ def sec_engine():
           all(k in rt.summary() for k in ("银两", "经验", "物品")),
           rt.summary())
 
-    # ---- 收益区改版:总收益行 / 明细行 ----
-    check("收益:总收益那行只写银两",
-          tools_keju.reward_earn_text(118649) == "收益：118649两"
-          and tools_keju.reward_earn_text(0) == "收益：0两"
-          and tools_keju.reward_earn_text(None) == "收益：0两")
-    rline = tools_keju.reward_round_lines([
-        {"slot": "1", "ts": "19:46:32", "sec": 481, "pass": True,
-         "silver": 6829, "exp": 34308, "items": {"藏宝图": 1}}])
-    check("收益明细:每轮一行,含用时/达标/银两/物品",
-          len(rline) == 1 and rline[0].startswith("1号")
-          and "用时 8分1秒(达标)" in rline[0]
-          and "银两 6,829" in rline[0] and "藏宝图×1" in rline[0], rline[0])
-    check("收益明细:没物品写“无”,没达标标“超时”",
-          "物品 无" in tools_keju.reward_round_lines(
-              [{"slot": 2, "sec": 700, "pass": False, "silver": 0}])[0])
-
     # ---- 单轮收益:按客户端分开归轮 ----
     def _mkt(s, y=10):
         return blk(s, 100, y)
@@ -1289,79 +1281,17 @@ def sec_engine():
     eng_r, app_r = mk_engine(bank, [blk(S1, 100, 200)])
     eng_r.keju_tool.rewards = RewardTally(
         os.path.join(tempfile.mkdtemp(prefix="keju_rw2_"), "r.json"))
-    eng_r._safe("cycle", True)
+    eng_r.keju_tool.keju_cycle(True)
     check("奖励:识别循环每轮都会统计收益",
           eng_r.keju_tool.rewards.silver == 6831 and eng_r.keju_tool.rewards.exp == 66580,
           f"{eng_r.keju_tool.rewards.silver}/{eng_r.keju_tool.rewards.exp}")
-    check("奖励:每条收益写进文件(界面不刷屏)",
-          any("[奖励]银两 +6831" in m and not ui for m, ui in app_r.logs_all),
-          [m for m, _ in app_r.logs_all][-2:])
+    check("奖励:每条收益都写进日志",
+          any("[奖励]银两 +6831" in m for m in app_r.logs_all),
+          app_r.logs_all[-2:])
 
     st_r = eng_r.keju_tool.ui_state()
-    check("ui_state:界面只认这个口,给银两/物品/逐轮明细",
-          set(st_r) == {"stats", "silver", "items", "rounds"}
-          and st_r["silver"] == 6831 and st_r["items"] == []
-          and st_r["rounds"] == [], str(st_r))
-    eng_r.keju_tool.rewards.feed([blk("你获得了定魂珠", 100, 240)], slot=1)
-    eng_r.keju_tool.rewards.feed(
-        [blk("恭喜你完成会试，共用时9分1秒。", 100, 300)], slot=1)
-    st_r2 = eng_r.keju_tool.ui_state()
-    check("ui_state:物品种类/件数(降序)与逐轮明细跟着走",
-          st_r2["items"] == [("定魂珠", 1)] and len(st_r2["rounds"]) == 1
-          and st_r2["rounds"][0]["slot"] == "1",
-          f"{st_r2['items']} {st_r2['rounds'][:1]}")
-
-    eng, app = mk_engine(bank, [], cfg=NO_REGIONS)
-    seq = []
-    eng.keju_tool._fullscan_once = lambda: (seq.append(1), 0 if len(seq) == 1 else 1)[-1]
-    eng.keju_tool._manual_fs = True                     # 手动扫描
-    eng.keju_tool.fullscan()
-    check("fullscan:第一次没找到会自动重试一次",
-          len(seq) == 2 and any("自动重试" in m for m in app.logs), f"调用 {len(seq)} 次")
-
-    # 重试前那 1 秒别浪费:先扫区域,手动扫描期间新弹的题不会漏
-    eng, app = mk_engine(bank, [blk(HDR + QA, 100, 200)])   # 有区域,区域里是真题
-    seq = []
-    eng.keju_tool._fullscan_once = lambda: (seq.append(1), 0)[1]
-    eng.keju_tool._manual_fs = True
-    t0 = time.time()
-    eng.keju_tool.fullscan()
-    el = time.time() - t0
-    check("fullscan:重试等待期间会先扫一遍区域(等待时长不变)",
-          len(seq) == 2 and app.said == ["答案甲"] and el >= 0.9,
-          f"全屏 {len(seq)} 次 / 播报 {app.said} / 耗时 {el:.1f}s")
-
-    fs_cfg = {"keju": {"regions": [None] * core.MAX_CLIENTS}}
-    eng, app = mk_engine(bank, [], cfg=fs_cfg)
-    eng.ocr = types.SimpleNamespace(recognize_blocks=lambda img, **kw: [])
-    eng.keju_tool._manual_fs = True                     # 手动扫描:结果必须进界面日志
-    check("_fullscan_once:一个字都没识别到 -> 返回 0 且界面可见",
-          eng.keju_tool._fullscan_once() == 0
-          and any("未识别到任何文字" in m for m in app.logs))
-
-    eng, app = mk_engine(bank, [blk("完全无关的一段文字内容", 100, 200)], cfg=fs_cfg)
-    eng.keju_tool._manual_fs = True
-    check("_fullscan_once:屏幕上没有题目 -> 返回 0 且界面可见",
-          eng.keju_tool._fullscan_once() == 0
-          and any("屏幕未认出科举题目" in m for m in app.logs))
-
-    eng, app = mk_engine(bank, [blk(QA, 100, 200), blk(QB, 100, 600)], cfg=fs_cfg)
-    rc = eng.keju_tool._fullscan_once()
-    check("_fullscan_once:屏幕上有两道题 -> 播报提醒并要求只留一道",
-          rc == 2 and app.said == ["请保证屏幕里只有一个题目"], f"rc={rc}")
-
-    eng, app = mk_engine(bank, [blk(QA, 100, 200)], cfg=fs_cfg)
-    rc = eng.keju_tool._fullscan_once()
-    check("_fullscan_once:单题 -> 播报 + 计入统计",
-          rc == 1 and app.said == ["答案甲"] and eng.keju_tool.round_stats["n"] == 1)
-    eng.keju_tool.recent_answered[AN] = time.time()
-    rc = eng.keju_tool._fullscan_once()
-    check("_fullscan_once:自动轮询遇到刚答过的题 -> 跳过",
-          rc == 1 and app.said == ["答案甲"], f"{app.said}")
-    eng.keju_tool._manual_fs = True
-    rc = eng.keju_tool._fullscan_once()
-    check("_fullscan_once:手动扫描同一题 -> 允许重听",
-          app.said == ["答案甲", "答案甲"], f"{app.said}")
+    check("ui_state:界面只认这个口,给各槽位角色名",
+          set(st_r) == {"names"} and st_r["names"] == [], str(st_r))
 
     eng, _ = mk_engine(bank, [])
     crop = np.full((40, 120, 3), 200, dtype=np.uint8)
@@ -1389,30 +1319,16 @@ def sec_engine():
           f"{len(eng.keju_tool.recent_answered)} 条")
     check("_recent_list:与记忆一致", len(eng.keju_tool._recent_list()) == 200)
 
-    eng.keju_tool._record_stat(0.5)
-    eng.keju_tool._record_stat(1.5)
-    check("_record_stat:累加题数与总响应时间",
-          eng.keju_tool.round_stats["n"] == 2 and abs(eng.keju_tool.round_stats["resp_sum"] - 2.0) < 1e-9,
-          f"{eng.keju_tool.round_stats}")
-
-    eng, app = mk_engine(bank, [])
-    eng._safe("这个方法不存在")
-    check("_safe:任务异常被吞掉并写日志(引擎线程不死)",
-          any("[引擎]任务异常" in m for m, _ in app.logs_all),)
-
     eng, app = mk_engine(bank, [blk(HDR + QA, 100, 200)])
     eng.request_cycle()
-    eng.request_fullscan()
     eng.set_watch(True)
-    pending = (eng.keju_tool._req_cycle, eng.keju_tool._req_fullscan)
+    pending = eng.keju_tool._req_cycle
     ran = [eng.keju_tool._run_pending() for _ in range(3)]
-    check("手动任务:cycle / fullscan 投递给科举自己的线程(引擎不再有任务队列)",
-          pending == (True, True) and ran == [True, False, False]
-          and eng.keju_tool._manual_fs is False and eng.keju_tool.watching is True
+    check("手动任务:cycle 投递给科举自己的线程(引擎不再有任务队列)",
+          pending is True and ran == [True, False, False]
+          and eng.keju_tool.watching is True
           and not hasattr(eng, "jobs") and eng.keju_tool._wake.is_set()
           and "[自动监听]已开启" in app.logs, f"{pending} {ran}")
-    eng.toggle_watch()
-    check("监听开关:toggle_watch 反转", eng.keju_tool.watching is False)
 
     # 看门狗恢复开关:真实引擎走 set_watch(→ refresh_tools → activate);
     # 原来就关着的不能空打一条"[自动监听]已停止"(状态根本没变)
@@ -1421,7 +1337,7 @@ def sec_engine():
     def _fake_self(engine):
         return types.SimpleNamespace(
             engine=engine,
-            log=lambda m, ui=True, detail="", **kw: logs_r.append(m))
+            log=lambda m, detail="", **kw: logs_r.append(m))
 
     app.logs.clear()
     eng.keju_tool.watching = False
@@ -1460,7 +1376,7 @@ def sec_engine():
         app.said = []
         app.last_answer = ""
         app.logs = []
-        app.log = lambda msg, ui=True, detail="": app.logs.append(msg)
+        app.log = lambda msg, detail="": app.logs.append(msg)
         app.speaker = types.SimpleNamespace(say=app.said.append)
         run_eng = core.Engine(app)
         run_eng.ocr = RunOcr([blk(HDR + QA, 100, 200)])
@@ -1541,7 +1457,7 @@ def sec_ocr_screen():
 
 @section
 def sec_gui():
-    with Sandbox() as sb, patch(official_chunk_hash=lambda timeout=15: ""):
+    with Sandbox() as sb, patch(update_bank=lambda: (False, "题库已是最新")):
         # App() 建题库时读的是被 patch 的 BANK_PATH,先往沙箱里放一份
         make_bank(sb.bank, [{"q": "第一道题的题干内容是什么", "a": "答案甲"}])
         old = time.time() - 86400 * 2
@@ -1549,21 +1465,37 @@ def sec_gui():
             f.write("2020-01-01 00:00:00 很久以前的一条日志\n")
         os.utime(sb.log, (old, old))
 
-        # 本应用启动即自动定位:这里固定成"找到 1 个客户端"
+        # 本应用启动即自动定位:这里固定成"找到 1 个客户端"(标题带角色名)
         with patch(find_client_windows=lambda: (
-                [("梦幻西游 ONLINE", [100, 150, 800, 650])], [])):
+                [("梦幻西游 ONLINE - (湖北2区[黄鹤楼] - 祭花′[29024311])",
+                  [100, 150, 800, 650])], [])):
             app = gui.App()
         app.root.withdraw()               # 测试时不弹窗
         real_engine = app.engine          # 真引擎先留着,收尾时关掉
-        check("界面:启动即自动定位,整窗口填进槽位(其余槽位留空)",
+
+        def caps_text(i, tag="name"):
+            """第 i 个胶囊上某类文字(name/x);取不到返回空串。"""
+            cv = app.client_capsules[i]
+            ids = cv.find_withtag(tag)
+            return cv.itemcget(ids[0], "text") if ids else ""
+
+        check("界面:启动即自动定位,定位到几个就显示几颗(名字+×)",
               app.cfg["keju"]["regions"][0] == [100, 150, 800, 650]
               and len(app.cfg["keju"]["regions"]) == core.MAX_CLIENTS
-              and app.region_vars[0].get() == "(100,150)-(800,650)",
-              str(app.cfg["keju"]["regions"]))
-        log_rec = []                      # 自己留一份日志,避免和滚动框抢队列
+              and caps_text(0) == "祭花′"
+              and bool(app.client_capsules[0].find_withtag("x"))
+              and not app.client_capsules[1].grid_info()
+              and app.engine.keju_tool.watching is True,   # 自动监听默认开
+              f'{caps_text(0)}/可见 {len(app.client_capsules[1].grid_info())}')
+
+        # 界面组不跑真识别:关掉监听 + 哑掉"定位后重新接管"(别碰真机屏幕)
+        app.engine.keju_tool.watching = False
+        app.engine.set_watch = lambda on: None
+
+        log_rec = []                      # 自己留一份日志,避免和真实写文件互相干扰
         real_log = app.log
-        app.log = lambda msg, ui=True, detail="", ui_text=None: (
-            log_rec.append(msg), real_log(msg, ui, detail, ui_text))
+        app.log = lambda msg, detail="": (log_rec.append(msg),
+                                          real_log(msg, detail))
 
         def ui_logs():                    # 已记录的界面日志文本
             return list(log_rec)
@@ -1588,12 +1520,6 @@ def sec_gui():
               f"alpha={fresh.attributes('-alpha')} state={fresh.state()}")
         ui_widgets.stop_anim(fresh)
         fresh.destroy()
-        dead = tk.Toplevel(app.root)
-        dead.destroy()
-        hit = []
-        ui_widgets.fade_out(dead, then=lambda: hit.append(1))
-        ui_widgets.stop_anim(dead)          # 已经没了的窗口也得安全
-        check("界面:窗口已经没了,淡出直接走回调、停表也不抛", hit == [1])
         try:
             raise RuntimeError("故意出错")
         except RuntimeError as e:
@@ -1602,148 +1528,110 @@ def sec_gui():
               any("[界面]回调出错" in m for m in log_rec),
               log_rec[-1] if log_rec else "")
 
-        # ---- 日志归属:界面滚动框只显示科举 + 公共的行 ----
-        check("日志:按 [模块] 认归属(科举那套=科举,其余=公共)",
-              core.log_scope("[科举]已进入") == "keju"
-              and core.log_scope("[题目对话框2]设置") == "keju"
-              and core.log_scope("[自动监听]匹配 92%") == "keju"
-              and core.log_scope("[客户端]发现 2 个客户端") == "keju"
-              and core.log_scope("[全屏扫描]匹配 88%") == "keju"
-              and core.log_scope("[应用]启动") == ""
-              and core.log_scope("没标签的一行") == "")
-        app.log_box.configure(state="normal")
-        app.log_box.delete("1.0", "end")
-        app.log_box.configure(state="disabled")
         app.log("[自动监听]这条该出现")
         app.log("[应用]公共的行也该出现")
-        app._drain_logs()
-        shown = app.log_box.get("1.0", "end")
-        check("日志:科举与公共的行都进滚动框",
-              "该出现" in shown and "公共的行" in shown,
-              shown.replace("\n", " | "))
+        filetxt = open(sb.log, encoding="utf-8").read()
+        check("日志:界面已无滚动框,两类行都只落日志文件",
+              not hasattr(app, "log_box")
+              and "该出现" in filetxt and "公共的行" in filetxt,
+              "log_box 还在" if hasattr(app, "log_box") else "文件缺行")
 
-        check("界面:默认配置反映到控件(间隔 0.4 / 5 个区域槽 / 监听关)",
-              app.interval_var.get() == "0.4"
-              and len(app.region_vars) == core.MAX_CLIENTS
-              and "关" in str(app.watch_btn["text"])
-              and str(app.mode_keju_btn["style"]) == "Accent.TButton")
+        check("界面:默认控件(名字框 5 / 圆角钮齐 / 占位+状态灯 / 默认御前科举)",
+              len(app.client_capsules) == core.MAX_CLIENTS
+              and app.mode_btn.label() == "御前科举"
+              and app.manual_btn.label() == "手动识别"
+              and app.mini_btn.label() == "迷你置顶"
+              and app.tts_btn.label() == "播报试听"
+              and app.mute_btn.label() == "语音静音"
+              and app.refresh_btn.label() == "客户端刷新"
+              and app.skin_btn.label() == "换肤"
+              and app.root.title() == "风二与露娜"
+              and app.hero_canvas.find_withtag("ph")     # 没信息时显示占位
+              and app.status_dot.itemcget("dot", "fill")
+              == ui_widgets.StatusDot.RED
+              and not any(hasattr(app, a) for a in
+                          ("watch_btn", "interval_var", "reward_var", "round_var",
+                           "earn_detail_btn", "clear_log_btn", "hint_label",
+                           "scan_btn", "autolocate_btn", "update_bank_btn")))
+
+        app.engine.keju_tool.watching = True
+        app._drain_logs()
+        check("界面:监听中 -> 状态灯变绿(闪烁)",
+              app.status_dot.itemcget("dot", "fill")
+              == ui_widgets.StatusDot.GREEN)
+        app.engine.keju_tool.watching = False
 
         app.cfg["keju"]["regions"][0] = [10, 20, 30, 40]
+        app.engine.keju_tool.set_auto_boxes(None)   # 引擎重启后:名字/基准都没了
         app._refresh_regions()
-        check("界面:区域坐标显示成 (x,y)-(x,y),没定位的写“未定位”",
-              app.region_vars[0].get() == "(10,20)-(30,40)"
-              and app.region_vars[1].get() == "未定位",
-              app.region_vars[0].get())
+        check("界面:已定位但没名字的胶囊显示客户端N,没定位的不显示",
+              caps_text(0) == "客户端1"
+              and not app.client_capsules[1].grid_info(),
+              f'{caps_text(0)}/胶囊1 {bool(app.client_capsules[1].grid_info())}')
 
         app._set_exam_mode(False)
         with open(sb.config, encoding="utf-8") as f:
             saved2 = json.load(f)["keju"]
-        check("界面:切换识别模式 -> 落盘 + 高亮跟着换",
+        check("界面:切到三大学士 -> 落盘 + 单按钮文案跟着换",
               app.cfg["keju"]["exam_mode"] is False and saved2["exam_mode"] is False
-              and str(app.mode_plain_btn["style"]) == "Accent.TButton"
-              and str(app.mode_keju_btn["style"]) == "TButton"
-              and str(app.mode_keju_btn["text"]) == "御前科举"
-              and str(app.mode_plain_btn["text"]) == "三大学士",
-              f'{app.mode_keju_btn["text"]}/{app.mode_plain_btn["text"]}')
+              and app.mode_btn.label() == "三大学士",
+              app.mode_btn.label())
         mode_line = [m for m in ui_logs() if m.startswith("[识别模式]")]
         check("界面:切模式日志只有 [识别模式]+模式名,不带括号解释",
               mode_line == ["[识别模式]三大学士"], mode_line[:1])
-        app._set_exam_mode(True)
-        check("界面:再切回御前科举只多一条日志(重复点不重复写)",
-              [m for m in ui_logs() if m.startswith("[识别模式]")]
+        app.mode_btn.invoke()             # 走按钮本身:再点一下切回御前科举
+        check("界面:同一个按钮再点一下切回御前科举(日志只多一条)",
+              app.cfg["keju"]["exam_mode"] is True
+              and app.mode_btn.label() == "御前科举"
+              and [m for m in ui_logs() if m.startswith("[识别模式]")]
               == ["[识别模式]三大学士", "[识别模式]御前科举"],
-              [m for m in ui_logs() if m.startswith("[识别模式]")])
+              app.mode_btn.label())
 
-        def line_tags(needle):
-            """按内容找那一行,再取它的标签;找不到返回 None(免得"没找到"也算通过)。"""
-            last = int(app.log_box.index("end-1c").split(".")[0])
-            for ln in range(1, last + 1):
-                if needle in app.log_box.get(f"{ln}.0", f"{ln}.end"):
-                    return app.log_box.tag_names(f"{ln}.0")
-            return None
-
-        app.log("[识别模式]御前科举")
+        app.last_question = "【第一道题的题干内容是什么?】"
+        app.last_answer = "答案甲"
         app._drain_logs()
-        mode_tags = line_tags("[识别模式]御前科举")
-        check("界面:切模式这行不高亮(只有答案行高亮)",
-              mode_tags is not None and "match" not in mode_tags,
-              str(mode_tags))
-        app.log("[自动监听]匹配 100% -> 第一道题… 【答案甲】| 响应 0.30s",
-                detail=" (OCR 0.20s 匹配 0.01s)")
-        time.sleep(0.1)
-        file_lines = [l for l in open(sb.log, encoding="utf-8").read()
-                      .strip().splitlines() if "匹配 100%" in l]
-        check("日志:界面只显示响应时间,文件里仍保留 OCR/匹配耗时",
-              file_lines and "响应 0.30s" in file_lines[-1]
-              and "(OCR 0.20s 匹配 0.01s)" in file_lines[-1]
-              and not any("OCR" in m for m in log_rec if "匹配 100%" in m),
-              file_lines[-1][-56:] if file_lines else "没写进文件")
-        app.log("[手动识别]匹配 100% -> 第一道题… 【答案甲】")
-        app._drain_logs()
-        ans_tags = line_tags("[手动识别]匹配 100%")
-        check("界面:认出题目给答案的那行绿字加粗(match 标签)",
-              ans_tags is not None and "match" in ans_tags
-              and app.log_box.tag_cget("match", "foreground") == "#0a7d3f"
-              and "bold" in app.log_box.tag_cget("match", "font"),
-              str(ans_tags))
-        for plain in ("[手动识别]读到的文字太碎,凑不出题干(仅 1 字):短…",
-                      "[全屏扫描]屏幕未认出科举题目(0.8s,最高 32%)",
-                      "[自动监听]题库中未找到匹配(最高 32%)",
-                      "[客户端1]整个客户端 (1,2)-(3,4) 640×480 ≈ 640×480 档"):
-            app.log(plain)
-            app._drain_logs()
-            tags = line_tags(plain[:14])
-            check(f"界面:非答案行不高亮({plain[6:16]}…)",
-                  tags is not None and "match" not in tags, str(tags))
+        qid = app.hero_canvas.find_withtag("q")
+        aid = app.hero_canvas.find_withtag("a")
+        check("界面:题目识别区显示当前题目和大字答案(占位消失)",
+              qid and aid
+              and app.hero_canvas.itemcget(qid[0], "text")
+              == "【第一道题的题干内容是什么?】"
+              and app.hero_canvas.itemcget(aid[0], "text") == "答案甲"
+              and not app.hero_canvas.find_withtag("ph"),
+              app.hero_canvas.itemcget(qid[0], "text") if qid else "无题目")
 
-        # ---- 收益区:总收益一行 + 物品标签 + 逐轮明细窗 ----
+        # ---- 收益/统计的界面显示已整个删掉(日志区只留打印框) ----
         app.engine.keju_tool.rewards.feed([{"text": "你得到了66580点经验，6831两银子",
                                 "x1": 1, "y1": 1, "x2": 2, "y2": 2, "conf": .9}])
-        app.engine.keju_tool.rewards.feed([{"text": "你获得了定魂珠",
-                                "x1": 1, "y1": 1, "x2": 2, "y2": 2, "conf": .9}])
         app._drain_logs()
-        check("界面:收益区只留总收益那一行(格式=收益：N两)",
-              app.reward_var.get() == "收益：6831两", app.reward_var.get())
-        check("界面:物品行上画了东西(名称标签 + ×件数)",
-              bool(app.reward_items_canvas.find_all()),
-              str(app.reward_items_canvas.find_all()[:3]))
-        app.engine.keju_tool.rewards.feed(  # 1 号客户端:一轮收益 + 落轮
-            [{"text": "恭喜你完成会试，共用时9分1秒。", "x1": 1,
-              "y1": 1, "x2": 2, "y2": 2, "conf": .9}], slot=1)
-        app._drain_logs()
-        app.earn_detail_btn.invoke()          # 走按钮本身,别只调方法
-        detail = app.earn_detail_text.get("1.0", "end")
-        check("界面:「收益明细」按钮打开逐轮明细(用时/银两/物品)",
-              "1号" in detail and "9分1秒(达标)" in detail
-              and "银两" in detail and "定魂珠" in detail, detail.strip()[:70])
-        app.earn_detail_win.destroy()
-        app.earn_detail_btn.invoke()          # 旧窗口已销毁:再点不能崩
-        check("界面:明细窗被销毁后再点按钮能重新开",
-              bool(app.earn_detail_win.winfo_exists()))
-        app.earn_detail_win.destroy()
+        check("界面:日志区只留打印框(统计/收益/物品/明细窗都不在界面上)",
+              not any(hasattr(app, a) for a in
+                      ("reward_var", "round_var", "reward_items_canvas",
+                       "earn_detail_btn", "clear_log_btn"))
+              and not hasattr(ui_keju, "draw_reward_items")
+              and not hasattr(ui_keju, "open_earn_detail"))
 
         keys = ("_region_last", "_region_ref", "_region_frame", "_region_ocr_ts",
                 "_region_t_detect", "_region_dirty")
         app.cfg["keju"]["regions"] = [None] * core.MAX_CLIENTS
         for attr in keys:
             getattr(app.engine.keju_tool, attr)[(1, 2, 3, 4)] = "y"
-        app.on_clear_regions()
-        check("界面:清除全部 -> 槽位清空 + 记忆清空",
+        app._clear_all_regions()
+        check("界面:清空坐标(关窗时同样走这里) -> 槽位清空 + 记忆清空",
               app.cfg["keju"]["regions"] == [None] * core.MAX_CLIENTS
               and all(not getattr(app.engine.keju_tool, a) for a in keys))
 
         # ---- 自动定位客户端:整窗口一条区域 ----
-        check("界面:提示文案含“最多 5 个”与“最小分辨率”",
-              "最小分辨率效率最高" in app.hint_label["text"],
-              app.hint_label["text"])
+        check("界面:定位钮旁的说明文字已删(不看说明也会用)",
+              not hasattr(app, "hint_label"))
         with patch(find_client_windows=lambda: ([], [])):
-            app.autolocate_btn.invoke()          # 走按钮本身,别只调方法
-        check("自动定位:界面上有按钮且点了会跑到定位逻辑",
-              str(app.autolocate_btn["text"]) == "自动定位客户端"
-              and any("没找到梦幻西游客户端窗口" in m for m in ui_logs()),
-              str(app.autolocate_btn["text"]))
+            app.refresh_btn.invoke()          # 走按钮本身,别只调方法
+        check("客户端刷新:按钮点了会跑到定位逻辑",
+              any("没找到梦幻西游客户端窗口" in m for m in ui_logs()),
+              [m for m in ui_logs() if "没找到" in m][:1])
 
-        two = [("梦幻西游 ONLINE", [100, 150, 800, 650]),
+        two = [("梦幻西游 ONLINE - (湖北2区[黄鹤楼] - 祭花′[29024311])",
+                [100, 150, 800, 650]),
                ("梦幻西游 ONLINE", [850, 150, 1550, 650])]
         with patch(find_client_windows=lambda: (list(two), [])):
             app.on_autolocate()
@@ -1754,9 +1642,10 @@ def sec_gui():
               and app.cfg["keju"]["regions"][1] == [850, 150, 1550, 650]
               and app.cfg["keju"]["regions"][2:] == [None] * (core.MAX_CLIENTS - 2)
               and saved3["regions"][0] == [100, 150, 800, 650]
-              and app.region_vars[0].get() == "(100,150)-(800,650)"
+              and caps_text(0) == "祭花′"
+              and caps_text(1) == "客户端2"       # 标题没名字的窗口回退客户端N
               and any("[客户端]发现 2 个客户端" in m for m in ui_logs()),
-              str(app.cfg["keju"]["regions"])[:40])
+              f'{caps_text(0)}/{caps_text(1)}')
 
         for attr in keys:
             getattr(app.engine.keju_tool, attr)[(100, 150, 800, 650)] = "z"
@@ -1788,19 +1677,43 @@ def sec_gui():
             app._set_exam_mode(False)
             app.on_autolocate()
             app._set_exam_mode(True)
-        check("自动定位:三大学士模式下提示改切御前科举",
-              any("建议切「御前科举」模式" in m for m in ui_logs()),
-              [m for m in ui_logs() if "建议切" in m][:1])
+        check("自动定位:三大学士模式下提示切御前科举更稳",
+              any("「御前科举」更稳" in m for m in ui_logs()),
+              [m for m in ui_logs() if "更稳" in m][:1])
 
-        # 分辨率:报出来 + 不是最小档就提醒;并提醒移动/改分辨率后会自动跟随
-        big = [("梦幻西游 ONLINE", [0, 0, 1015, 829])]
-        with patch(find_client_windows=lambda: (list(big), [])):
+        # 分辨率:只支持 640×480 / 860×600 两档 —— 其它档不定位、弹框说明;
+        # 混合时支持的照常定位。并提醒移动/改分辨率后会自动跟随
+        big = [("梦幻西游 ONLINE", [0, 0, 1015, 829]),
+               ("梦幻西游 ONLINE2", [0, 0, 640, 480])]
+        warned = []
+        with patch(mods=(gui,), messagebox=types.SimpleNamespace(
+                showwarning=lambda *a, **k: warned.append(a))), \
+             patch(find_client_windows=lambda: (list(big), [])):
             app.on_autolocate()
-        check("自动定位:打出客户端分辨率档,不是最小档就提醒调小",
-              any("1015×829 ≈ 1024×768 档" in m for m in ui_logs())
+        check("自动定位:非支持档跳过并弹框,支持的照常定位",
+              app.cfg["keju"]["regions"][0] == [0, 0, 640, 480]
+              and len([r for r in app.cfg["keju"]["regions"] if r]) == 1
+              and any("分辨率不支持,已跳过: 1015×829 ≈ 1024×768 档"
+                      in m for m in ui_logs())
+              and len(warned) == 1
+              and "640×480 / 800×600" in warned[0][1]
+              and "效果最佳" in warned[0][1],
+              f"warned={warned} regions={app.cfg['keju']['regions'][:2]}")
+        mid = [("梦幻西游 ONLINE", [0, 0, 860, 600])]
+        hinted, warned_mid = [], []
+        with patch(mods=(gui,), messagebox=types.SimpleNamespace(
+                showwarning=lambda *a, **k: warned_mid.append(a),
+                showinfo=lambda *a, **k: hinted.append(a))), \
+             patch(find_client_windows=lambda: (list(mid), [])):
+            app.on_autolocate()
+        check("自动定位:打出客户端分辨率档,不是最小档就弹框建议 640×480(不弹不支持)",
+              app.cfg["keju"]["regions"][0] == [0, 0, 860, 600]
+              and any("860×600 ≈ 800×600 档" in m for m in ui_logs())
               and any("不是最小分辨率" in m and "640×480" in m
-                      for m in ui_logs()),
-              [m for m in ui_logs() if "档" in m][:1])
+                      for m in ui_logs())
+              and len(hinted) == 1 and "640×480" in hinted[0][1]
+              and not warned_mid,
+              f"hinted={hinted} warned={warned_mid}")
         check("自动定位:提示客户端挪了会自动跟随",
               sum(1 for m in ui_logs() if "会自动跟随" in m) >= 1,
               [m for m in ui_logs() if "跟随" in m][:1])
@@ -1815,13 +1728,84 @@ def sec_gui():
               and not any("不是最小分辨率" in m for m in new_lines),
               new_lines[:2])
 
+        # ---- 胶囊 ×:删单个客户端(其余前移,跟随基准/名字/记忆/落盘同步) ----
+        with patch(find_client_windows=lambda: (list(two), [])):
+            app.on_autolocate()
+        rm_key = (100, 150, 800, 650)
+        for attr in keys:
+            getattr(app.engine.keju_tool, attr)[rm_key] = "y"
+        app.on_remove_client(0)
+        with open(sb.config, encoding="utf-8") as f:
+            saved_rm = json.load(f)["keju"]
+        check("胶囊×:删客户端1 -> 其余前移,跟随基准/角色名/记忆/落盘同步",
+              app.cfg["keju"]["regions"][0] == [850, 150, 1550, 650]
+              and app.cfg["keju"]["regions"][1:] == [None] * (core.MAX_CLIENTS - 1)
+              and saved_rm["regions"][0] == [850, 150, 1550, 650]
+              and app.engine.keju_tool._auto_boxes == [[850, 150, 1550, 650]]
+              and not app.engine.keju_tool.ui_state()["names"][0]
+              and caps_text(0) == "客户端1"
+              and all(not getattr(app.engine.keju_tool, a).get(rm_key)
+                      for a in keys)
+              and any("已移除客户端1" in m for m in ui_logs()),
+              str(app.engine.keju_tool._auto_boxes))
+
+        n_rm = len(ui_logs())
+        app.on_remove_client(4)               # 空槽:必须是无害空操作
+        check("胶囊×:空槽上删是无害空操作(不落盘不记日志)",
+              len(ui_logs()) == n_rm
+              and app.cfg["keju"]["regions"][0] == [850, 150, 1550, 650],
+              str(app.cfg["keju"]["regions"][:2]))
+
+        app.cfg["keju"]["regions"] = [None] * core.MAX_CLIENTS
+        app.engine.keju_tool.set_auto_boxes(None)
+        app._refresh_regions()
+        check("界面:没定位到客户端 -> 左栏显示占位图,名字框全藏",
+              app.side_ph.place_info()
+              and app.side_ph.find_withtag("ph")
+              and not any(cv.grid_info() for cv in app.client_capsules),
+              f"占位 {bool(app.side_ph.place_info())}")
+
+        check("窗口标题抠角色名:最后一个 - 后截到 [,没有 - 就是没进角色",
+              core.client_name(
+                  "梦幻西游 ONLINE - (湖北2区[黄鹤楼] - 祭花′[29024311])")
+              == "祭花′"
+              and core.client_name(
+                  "梦幻西游 ONLINE - (北京1区[紫禁之巅] - 服务器大官人)")
+              == "服务器大官人"
+              and core.client_name("梦幻西游 ONLINE") == ""
+              and core.client_name("") == ""
+              and core.client_name(None) == "",
+              core.client_name(
+                  "梦幻西游 ONLINE - (湖北2区[黄鹤楼] - 祭花′[29024311])"))
+
         check("分辨率:3 档尺寸都认得出来(最小档才不提醒)",
               core.client_size_info([0, 0, 640, 480])[1] is True
               and core.client_size_info([0, 0, 860, 600]) == (
-                  "860×600 ≈ 860×600 档", False)
+                  "860×600 ≈ 800×600 档", False)
               and core.client_size_info([0, 0, 1024, 768])[1] is False
               and core.client_size_info([0, 0, 2048, 1536])[1] is False,
               str(core.client_size_info([0, 0, 640, 480])))
+        check("分辨率:只支持两档(拉伸过的按就近归档也算)",
+              core.client_supported([0, 0, 640, 480])
+              and core.client_supported([0, 0, 800, 600])
+              and core.client_supported([0, 0, 860, 600])
+              and core.client_supported([0, 0, 815, 679])
+              and not core.client_supported([0, 0, 1024, 768])
+              and not core.client_supported([0, 0, 1015, 829])
+              and core.supported_res_text() == "640×480 / 800×600",
+              core.supported_res_text())
+        # 高分屏:游戏(DPI-unaware)设置里的"800×600",在 125% 缩放的屏幕上
+        # 物理窗口是 1015×828;档位判定按枚举时记下的显示器 DPI 折算回逻辑值
+        old_dpi, core.GAME_DPI = core.GAME_DPI, 120
+        try:
+            dpi_ok = (core.client_supported([0, 0, 1015, 828])
+                      and core.client_size_info([0, 0, 1015, 828]) == (
+                          "812×662 ≈ 800×600 档", False)
+                      and not core.client_supported([0, 0, 1280, 1042]))
+        finally:
+            core.GAME_DPI = old_dpi
+        check("分辨率:125% 缩放下物理 1015×828 折算回逻辑再判档(= 800×600)",
+              dpi_ok, str(core.client_size_info([0, 0, 1015, 828])))
 
         bad_fmt = [m for m in ui_logs() if not m.startswith("[")]
         other_mod = [m for m in ui_logs() if m.startswith("[其他]")]
@@ -1836,35 +1820,25 @@ def sec_gui():
               and all(len(w) == 2 and len(w[1]) == 4 for w in real_wins),
               f"{len(real_wins)} 个客户端 / {len(real_mini)} 个最小化")
 
-        app.engine.keju_tool.round_stats = {"n": 3, "resp_sum": 1.2, "unmatched": 1}
-        app.on_reset_stats()
-        check("界面:重置本局统计",
-              app.engine.keju_tool.round_stats == {"n": 0, "resp_sum": 0.0, "unmatched": 0})
-
-        app.log("这条只写日志文件", ui=False)
-        app.log("这条进界面滚动框")
-        app._drain_logs()
-        box = app.log_box.get("1.0", "end")
+        app.log("这条手动写的日志一")
+        app.log("这条手动写的日志二")
         filetxt = open(sb.log, encoding="utf-8").read()
-        check("界面:ui=False 的消息只进日志文件,不进滚动框",
-              "这条进界面滚动框" in box and "这条只写日志文件" not in box
-              and "这条只写日志文件" in filetxt)
-
-        app.log("这条会被清空按钮清掉")
-        app._drain_logs()
-        had = "这条会被清空按钮清掉" in app.log_box.get("1.0", "end")
-        app.on_clear_log()
-        check("界面:清空日志只清滚动框,不动 keju.log",
-              had and app.log_box.get("1.0", "end").strip() == ""
-              and "这条会被清空按钮清掉" in open(sb.log, encoding="utf-8").read())
+        check("界面:日志全部落文件(界面已无滚动框)",
+              not hasattr(app, "log_box")
+              and "日志一" in filetxt and "日志二" in filetxt)
 
         app.on_toggle_mute()
-        muted = (app.cfg["app"]["mute"] is True and "开" in str(app.mute_btn["text"])
-                 and json.load(open(sb.config, encoding="utf-8"))["app"]["mute"] is True)
+        muted = (app.cfg["app"]["mute"] is True
+                 and json.load(open(sb.config, encoding="utf-8"))["app"]["mute"] is True
+                 and app.mute_btn.label() == "语音恢复"
+                 and app.mute_btn._pal["bg"]
+                 == ui_keju.SKINS[app.skin]["mute"]["bg"])
         app.on_toggle_mute()
-        check("界面:静音按钮切换状态并落盘",
+        check("界面:静音钮切换状态并落盘(文案+配色跟着换)",
               muted and app.cfg["app"]["mute"] is False
-              and "关" in str(app.mute_btn["text"]))
+              and app.mute_btn.label() == "语音静音"
+              and app.mute_btn._pal["bg"]
+              == ui_keju.SKINS[app.skin]["ghost"]["bg"])
 
         class RecSp:
             def __init__(self):
@@ -1883,6 +1857,31 @@ def sec_gui():
               app.speaker.said == ["语音测试,C铁观音,唐朝"])
         fake_sp = app.speaker
         app.speaker = real_sp
+
+        rc_calls = []
+        real_rc = app.engine.request_cycle
+        app.engine.request_cycle = lambda: rc_calls.append(1)
+        app.manual_btn.invoke()           # 走按钮本身:投递一次手动识别
+        app.engine.request_cycle = real_rc
+        check("界面:手动识别按钮投递一次识别任务", rc_calls == [1], str(rc_calls))
+
+        app.on_toggle_skin()
+        app._drain_logs()
+        check("界面:换肤 -> 落盘 + 整窗重建,按钮和题目区都在",
+              app.skin == "light"
+              and json.load(open(sb.config, encoding="utf-8"))["app"]["skin"]
+              == "light"
+              and app.mode_btn.label() == "御前科举"
+              and app.refresh_btn.label() == "客户端刷新"
+              and app.hero_canvas.find_withtag("q")      # 题目还在(重画过)
+              and app.status_dot.itemcget("dot", "fill")
+              == ui_widgets.StatusDot.RED)
+        app.on_toggle_skin()
+        app._drain_logs()
+        check("界面:再点换肤切回玄夜(深色)",
+              app.skin == "dark"
+              and json.load(open(sb.config, encoding="utf-8"))["app"]["skin"]
+              == "dark")
 
         app.last_answer = "一阵飓风卷起了龙宫的一些物品散落建邺城"
         app.on_mini()
@@ -1920,6 +1919,15 @@ def sec_gui():
         check("界面:迷你窗被拖动后不再被拉回右上角(回归)",
               abs(dx - 700) <= 4 and abs(dy - 300) <= 4,
               f"x={dx} y={dy}")
+
+        # 真实拖动走 gui 的两个回调(标题栏原生拖动在 DPI 感知进程里失效,
+        # 见 on_mini_drag_start):抓着大字拖 60px,窗口要跟着挪
+        app.on_mini_drag_start(types.SimpleNamespace(x_root=1000, y_root=500))
+        app.on_mini_drag_move(types.SimpleNamespace(x_root=940, y_root=440))
+        app.mini.update()
+        dx, dy = app.mini.winfo_x(), app.mini.winfo_y()
+        check("界面:抓着大字能拖动迷你窗(拖动回调挪窗)",
+              abs(dx - 640) <= 4 and abs(dy - 240) <= 4, f"x={dx} y={dy}")
         app.on_restore()
         check("界面:还原 -> 迷你窗销毁、主窗恢复",
               app.mini is None and str(app.root.state()) == "normal")
@@ -1927,7 +1935,6 @@ def sec_gui():
         class FakeEngine:
             def __init__(self, a):
                 self.keju_tool = types.SimpleNamespace(   # 科举那套状态在工具自己身上
-                    round_stats={"n": 0, "resp_sum": 0.0, "unmatched": 0},
                     watching=False)
                 self.started = False
 
@@ -1950,17 +1957,8 @@ def sec_gui():
         app.on_mini()                     # 第二次:只把已有小窗提到前面
         check("界面:重复点迷你置顶只提升已有窗口", app.mini is not None)
 
-        app.interval_var.set("0.05")      # 低于下限
-        app._save_interval()
-        low = app.cfg["keju"]["interval"]
-        app.interval_var.set("abc")       # 非法输入
-        app._save_interval()
-        check("界面:间隔输入被夹到下限、非法输入不写进配置",
-              low == 0.4 and app.cfg["keju"]["interval"] == 0.4
-              and app.interval_var.get() == "abc", f"{low}")
-
         app._set_exam_mode(True)          # 与当前一致:直接返回(不重复写盘)
-        app.mode_keju_btn.destroy()       # 按钮没了 -> 刷新要兜住
+        app.mode_btn.destroy()            # 按钮没了 -> 刷新要兜住
         app._refresh_mode_btn()
         check("界面:模式按钮被销毁后刷新不报错", True)
 
@@ -1991,24 +1989,23 @@ def sec_gui():
         check("界面:小窗已销毁/销毁失败时都能正常还原主窗",
               app.mini is None and str(app.root.state()) == "normal")
 
-        class HalfBtn:
-            def configure(self, **kw):
-                if "style" in kw:            # 文本能设,样式设不了
-                    raise RuntimeError("主题不支持该样式")
+        app.cfg["app"]["last_bank_check"] = ""    # 启动时已成功更新并记过账
+        with patch(update_bank=raiser(OSError("断网"))):
+            app._auto_bank_update()
+            time.sleep(0.3)
+        check("界面:启动更新题库失败也不影响使用(后台只记一声)",
+              any("[题库]更新失败" in m for m in ui_logs())
+              and app.cfg["app"]["last_bank_check"] == "",   # 失败不记账
+              [m for m in ui_logs() if "[题库]" in m][:1])
 
-        real_btn = app.watch_btn
-        app.watch_btn = HalfBtn()
-        app._refresh_watch_btn()
-        app.watch_btn = real_btn
-        check("界面:监听按钮样式设置失败也不影响状态刷新", True)
-
-        app._auto_bank_check()            # 当天已检查过:直接返回(不联网)
-        app.cfg["app"]["last_bank_check"] = ""
-        with patch(save_config=raiser(OSError("配置写不进去"))):
-            app._auto_bank_check()
-            time.sleep(0.2)
-        check("界面:记录'今天已检查'失败也不影响启动",
-              app.cfg["app"].get("last_bank_check") != "")
+        import datetime as _dt
+        app.cfg["app"]["last_bank_check"] = _dt.date.today().isoformat()
+        n_kj = len([m for m in ui_logs() if "[题库]" in m])
+        app._auto_bank_update()
+        time.sleep(0.2)
+        check("界面:当天已经更新过,当天内再启动不再更新",
+              len([m for m in ui_logs() if "[题库]" in m]) == n_kj,
+              app.cfg["app"].get("last_bank_check"))
 
         class FakeEngineOK(FakeEngine):
             def is_alive(self):
@@ -2022,10 +2019,8 @@ def sec_gui():
             def __init__(self, a):
                 raise RuntimeError("引擎起不来")
 
-        import datetime as _dt
-        today = _dt.date.today().isoformat()
         if not FAST:
-            # 更新题库 / 自动检查这两组要反复加载真题库(约 4 秒),快速模式跳过
+            # 更新题库这组要反复加载真题库(约 4 秒),快速模式跳过
             with patch(update_bank=lambda: (True, "题库已更新: 1 → 2 题"),
                        count_missing_voice=lambda cfg, b: 0):
                 app._bank_update_worker()
@@ -2049,50 +2044,23 @@ def sec_gui():
                 check("界面:更新失败 -> 保留原题库并提示",
                       any("[题库]更新失败" in m for m in ui_logs()))
 
+            app.cfg["app"]["last_bank_check"] = ""
             with patch(update_bank=lambda: (False, "题库已是最新(5 题)")):
-                app.on_update_bank()
-                for _ in range(60):
-                    if not getattr(app, "_bank_updating", False):
-                        break
-                    time.sleep(0.05)
-                n_first = sum(1 for m in ui_logs() if "[题库]正在检查更新" in m)
-                app._bank_updating = True           # 模拟正在更新:按钮应防重入
-                app.on_update_bank()
-                app._bank_updating = False
-                check("界面:更新题库按钮后台执行且防重入",
-                      n_first == 1 and not getattr(app, "_bank_updating", False))
-
-            app.cfg["app"]["last_bank_check"] = ""
-            with patch(official_chunk_hash=lambda timeout=15: ""):
-                app._auto_bank_check()
+                app._auto_bank_update()
                 time.sleep(0.3)
-            check("界面:题库检查断网时静默跳过并记下当天已检查",
-                  app.cfg["app"]["last_bank_check"] == today)
-
+            check("界面:每天首次启动更新题库,已是最新也报一声并记账",
+                  any("题库已是最新" in m for m in ui_logs())
+                  and app.cfg["app"]["last_bank_check"] != "")
             app.cfg["app"]["last_bank_check"] = ""
-            with patch(official_chunk_hash=lambda timeout=15: "same",
-                       _local_meta=lambda: {"chunk_hash": "same"}):
-                app._auto_bank_check()
-                time.sleep(0.3)
-            check("界面:哈希一致时不再下载题库(只记已经检查过)",
-                  app.cfg["app"]["last_bank_check"] == today)
-
-            app.cfg["app"]["last_bank_check"] = ""
-            with patch(official_chunk_hash=lambda timeout=15: "changed",
-                       _local_meta=lambda: {"chunk_hash": "same"},
-                       update_bank=lambda: (False, "题库已是最新(5 题)")):
-                app._auto_bank_check()
+            with patch(update_bank=lambda: (True, "题库已更新: 1 → 2 题"),
+                       count_missing_voice=lambda cfg, b: 0):
+                n_upd = sum(1 for m in ui_logs() if "题库已更新" in m)
+                app._auto_bank_update()
                 time.sleep(0.4)
-            check("界面:发现新版本会自动走更新流程",
-                  any("[题库]检测到新版本" in m for m in ui_logs())
-                  and not getattr(app, "_bank_updating", False))
-
-            app.cfg["app"]["last_bank_check"] = ""
-            with patch(official_chunk_hash=raiser(OSError("断网"))):
-                app._auto_bank_check()
-                time.sleep(0.3)
-            check("界面:题库检查异常被忽略(不影响使用)",
-                  app.cfg["app"]["last_bank_check"] == today)
+                check("界面:启动时发现新版本走同一套更新+热加载流程",
+                      sum(1 for m in ui_logs() if "题库已更新" in m) == n_upd + 1
+                      and app.cfg["app"]["last_bank_check"] != "",
+                      str([m for m in ui_logs() if "[题库]" in m][-2:]))
 
         with patch(Engine=FakeEngine):
             app.engine = DeadEngine(app)
@@ -2113,18 +2081,6 @@ def sec_gui():
         app.on_mini()
         app.mini_label.destroy()            # 标签被销毁:字号自适应该兜住
         app._drain_logs()
-        app.engine.keju_tool.round_stats = None        # 统计坏掉:刷新统计该兜住
-        app._drain_logs()
-        app.engine.keju_tool.round_stats = {"n": 1, "resp_sum": 0.5, "unmatched": 0}
-        app.watch_btn.destroy()              # 按钮没了:直接刷新也不该抛
-        try:
-            app._refresh_watch_btn()
-            btn_ok = True
-        except Exception:
-            btn_ok = False
-        app._drain_logs()
-        check("界面:监听按钮被销毁后直接刷新不抛异常(回归)", btn_ok,
-              f"btn_ok={btn_ok}")
 
         class WackyEngine:
             @property
@@ -2139,8 +2095,9 @@ def sec_gui():
         app._drain_logs()                    # 第二拍:同类失败不该再刷一条
         filetxt = open(sb.log, encoding="utf-8").read()
         check("界面:刷新链兜底的失败首错记一次日志(不无声也不刷屏)",
-              filetxt.count("刷新项「本局统计」") == 1
-              and filetxt.count("刷新项「监听按钮」") == 1,
+              filetxt.count("刷新项「区域显示」") == 1
+              and "刷新项「监听按钮」" not in filetxt
+              and "刷新项「本局统计」" not in filetxt,
               [l for l in filetxt.splitlines() if "刷新项" in l][:3])
         check("界面:引擎状态读取异常时刷新链不断", True)
         app.engine = FakeEngineOK(app)
@@ -2238,7 +2195,7 @@ def sec_cli():
         eng, app = mk_engine(ev_bank, [
             blk("御前科举大赛第1关：这一关考的是综合。题目：第一道题的题干内容是什么",
                 100, 200)])
-        eng._safe("cycle", True)
+        eng.keju_tool.keju_cycle(True)
         with open(sb_ev.events, encoding="utf-8") as f:
             ev_rows = [json.loads(l) for l in f if l.strip()]
         check("事件:识别循环答出的题写进 events.jsonl(带得分/答案/耗时)",
@@ -2349,7 +2306,8 @@ def sec_cli():
             check("命令行:题库更新失败返回 1 并打印原因",
                   rc == 1 and "更新失败" in out, out.strip())
 
-        with patch(check_deps=lambda: ["numpy"], ensure_data_files=lambda: None):
+        with patch(check_deps=lambda: ["numpy"], ensure_data_files=lambda: None), \
+                patch(mods=(keju,), _single_instance=lambda: True):
             sys.argv = ["keju.py"]
             rc, out = capture(keju.main)
             check("命令行:缺依赖时给安装提示并返回 1",
@@ -2357,7 +2315,8 @@ def sec_cli():
 
         with patch(check_deps=lambda: [], ensure_data_files=lambda: None,
                    BANK_PATH=os.path.join(tempfile.gettempdir(),
-                                          "keju_没有这个题库.json")):
+                                          "keju_没有这个题库.json")), \
+                patch(mods=(keju,), _single_instance=lambda: True):
             sys.argv = ["keju.py"]
             rc, out = capture(keju.main)
             check("命令行:题库文件缺失时返回 1",
@@ -2459,27 +2418,26 @@ def sec_extra():
 
         eng, app = mk_engine(bank, [])
         eng.screen = BoomScreen()
-        eng._safe("cycle", True)
+        eng.keju_tool.keju_cycle(True)
         check("cycle:区域截图失败 -> 记日志并安全退出(不崩)",
               any("截图失败" in m for m in app.logs))
 
         eng, app = mk_engine(bank, [], cfg={"keju": {"exam_mode": False}})
         eng.ocr = types.SimpleNamespace(recognize_blocks=lambda img, **kw: [])
-        eng._safe("cycle", True)
+        eng.keju_tool.keju_cycle(True)
         check("cycle:区域里一个字都没识别到 -> 本轮跳过", not app.said)
 
         eng, app = mk_engine(bank, [blk("短", 100, 200)],
                              cfg={"keju": {"exam_mode": False}})
-        eng._safe("cycle", True)
+        eng.keju_tool.keju_cycle(True)
         check("cycle:三大学士模式下的碎片文本(<4 字)-> 跳过", not app.said)
 
         eng, app = mk_engine(bank, [blk("完全无关的一段文字内容", 100, 200)],
                              cfg={"keju": {"exam_mode": False}})
-        eng._safe("cycle", True)
+        eng.keju_tool.keju_cycle(True)
         check("cycle:区域文字与题库对不上 -> 记未匹配(不播报)",
-              not app.said and eng.keju_tool.round_stats["unmatched"] == 1
-              and any("未找到匹配" in m for m in app.logs),
-              str(eng.keju_tool.round_stats))
+              not app.said and any("未找到匹配" in m for m in app.logs),
+              [m for m in app.logs if "未找到匹配" in m][:1])
 
         # 多开:一个客户端没答出,同一轮里其余客户端照常识别(不被挡一轮)
         class SeqScreen:
@@ -2497,22 +2455,15 @@ def sec_extra():
             return [blk(HDR + QA, 100, 200)]                      # 2 号:真题
         eng.screen = SeqScreen()
         eng.ocr = types.SimpleNamespace(recognize_blocks=_two_ocr)
-        eng._safe("cycle", False)
+        eng.keju_tool.keju_cycle(False)
         check("多开:一个区域没匹配不挡同轮其他客户端(一轮看完全部区域)",
               app.said == ["答案甲"] and seen["n"] == 2,
               f"{app.said} OCR {seen['n']} 次")
 
         eng, app = mk_engine(bank, [blk(HDR + QA, 100, 200)])
-        eng._safe("cycle", False)               # 首帧识别
-        eng._safe("cycle", False)               # 同一画面:被帧门控挡住
+        eng.keju_tool.keju_cycle(False)               # 首帧识别
+        eng.keju_tool.keju_cycle(False)               # 同一画面:被帧门控挡住
         check("cycle:画面没变时第二次直接跳过", app.said == ["答案甲"])
-
-        eng, app = mk_engine(bank, [], cfg={"keju": {"regions": [None] * core.MAX_CLIENTS}})
-        eng.screen = BoomScreen()
-        eng.keju_tool._manual_fs = True                       # 手动扫描:要看得见结果
-        check("_fullscan_once:全屏截图失败 -> 返回 0 并记日志",
-              eng.keju_tool._fullscan_once() == 0
-              and any("[全屏扫描]截图失败" in m for m in app.logs))
 
         class BadWarmOcr:
             def warmup(self):
@@ -2522,7 +2473,7 @@ def sec_extra():
         app2.cfg = core.split_config({"regions": [None] * core.MAX_CLIENTS,
                                       "interval": 0.4, "exam_mode": True})
         app2.logs = []
-        app2.log = lambda msg, ui=True: app2.logs.append(msg)
+        app2.log = lambda msg: app2.logs.append(msg)
         app2.bank = bank
         app2.speaker = types.SimpleNamespace(say=lambda t: None)
         e2 = core.Engine(app2)
@@ -2555,7 +2506,7 @@ def sec_extra():
         app3.said = []
         app3.last_answer = ""
         app3.logs = []
-        app3.log = lambda msg, ui=True, detail="": app3.logs.append(msg)
+        app3.log = lambda msg, detail="": app3.logs.append(msg)
         app3.speaker = types.SimpleNamespace(say=app3.said.append)
         e3 = core.Engine(app3)
         e3.ocr = RunOcr([blk(HDR + QA, 100, 200)])
@@ -2567,17 +2518,12 @@ def sec_extra():
             time.sleep(0.3)
             e3.request_cycle()                  # 监听中手动识别
             time.sleep(0.3)
-            e3.request_fullscan()               # 监听中全屏扫描
-            time.sleep(0.4)
             e3.set_watch(False)
             time.sleep(0.4)
             e3.request_cycle()                  # 空闲时手动识别
-            time.sleep(0.3)
-            e3.request_fullscan()               # 空闲时全屏扫描
             time.sleep(0.5)
         check("任务循环:监听中/空闲时的手动任务都被执行",
               set(app3.said) == {"答案甲"} and len(app3.said) >= 2
-              and any("[全屏扫描]" in m for m in app3.logs)
               and any("[自动监听]已开启" in m for m in app3.logs),
               f"播报 {app3.said}")
 
@@ -2764,15 +2710,6 @@ def sec_extra():
                   and all(e["answer"] and e["question"] for e in ents3),
                   f"{len(ents3)} 条")
 
-        def no_hash(url, timeout=30):
-            if "app." in url:
-                return b"var x=1;"                  # 没有 306:"xxxx"
-            return b'<script src="static/js/app.abc12345.js"></script>'
-
-        with patch(_http_get=no_hash):
-            check("official_chunk_hash:找不到哈希时返回空串",
-                  bank_mod.official_chunk_hash() == "")
-
         def exp_fail(url, timeout=30):
             if "exp." in url:
                 raise OSError("数据块下载失败")
@@ -2837,7 +2774,7 @@ def sec_extra():
 
         def one_cycle(blocks):
             e_, a_ = mk_engine(real_bank, blocks)
-            e_._safe("cycle", True)
+            e_.keju_tool.keju_cycle(True)
             return a_
 
         n_ans = sum(len({m["a"] for m in v}) for v in amb.values())
@@ -2938,7 +2875,7 @@ def sec_extra():
         with patch(UNCOLLECTED_PATH=path):
             eng, app = mk_engine(conf_bank, [blk(read_text, 100, 200)],
                                  cfg={"keju": {"exam_mode": False}})
-            eng._safe("cycle", True)
+            eng.keju_tool.keju_cycle(True)
             tips = [m for m in app.logs if "低置信" in m]
         rec = (open(path, encoding="utf-8").read().strip().splitlines()
                if os.path.exists(path) else [])
@@ -2982,7 +2919,7 @@ def sec_extra():
             blk("韩愈   李顾   陈子昂   常建", 100, 400, h=34)]
         with patch(UNCOLLECTED_PATH=opt_path):
             eng_o, app_o = mk_engine(obank, opt_blocks)
-            eng_o._safe("cycle", True)
+            eng_o.keju_tool.keju_cycle(True)
         opt_rec = (json.loads(open(opt_path, encoding="utf-8").read()
                              .strip().splitlines()[-1])
                    if os.path.exists(opt_path) else {})
@@ -3275,8 +3212,6 @@ def sec_extra_errors():
             except ValueError as e:
                 no_app = "未找到 app.js" in str(e)
             check("官方源:页面里没有 app.js 时抛错", no_app)
-            check("official_chunk_hash:页面里没有 app.js 时返回空串",
-                  bank_mod.official_chunk_hash() == "")
 
         def app_no_hash(url, timeout=30):
             if "app." in url:
@@ -3328,6 +3263,12 @@ def sec_extra_errors():
         finally:
             _sh.copyfile = real_copy
         check("ensure_data_files:复制失败静默跳过(不影响启动)", copy_ok)
+
+        # ---- 单实例互斥体:同进程第二次必判"已运行" ----
+        first = keju._single_instance()
+        second = keju._single_instance()
+        check("单实例:同进程第二次创建互斥体必判已运行",
+              second is False, f"first={first} second={second}")
 
         class BadShcore:
             def SetProcessDpiAwareness(self, v):

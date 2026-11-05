@@ -216,14 +216,14 @@ def cmd_selftest(seed: int = SELFTEST_SEED) -> int:
               f"“{e['q'][:20]}…” -> “{got}” 期望“{e['a']}”")
     print(f"\n自检结果: {passed}/{len(cases)} 通过(含 OCR 噪声与选项消歧模拟)")
 
-    # ---- 全屏扫描场景 ----
-    print("\n-- 全屏扫描场景 --")
+    # ---- 整屏找题场景(锚点/滑窗/聚类,三大学士模式同一套匹配核心) ----
+    print("\n-- 整屏找题场景 --")
     e1 = random.choice(qbank.entries)
     fs_pass = True
 
     img = _render_fullscreen([_add_ocr_noise(e1["q"], truncate=False)])
     blocks = ocr.recognize_blocks(np.asarray(img)[:, :, ::-1].copy())
-    n_q, entry, score, note, _ = tools_keju.resolve_fullscan(qbank, blocks, 70)
+    n_q, entry, score, note, _ = tools_keju.resolve_questions(qbank, blocks, 70)
     ok = n_q == 1 and entry is not None and entry["a"] == e1["a"]
     detail = f"相似度{score:.0f}% -> “{entry['a']}”{note}" if entry else "无结果"
     fs_pass &= _selftest_report(
@@ -235,7 +235,7 @@ def cmd_selftest(seed: int = SELFTEST_SEED) -> int:
         e2 = random.choice(qbank.entries)
     img = _render_fullscreen([e1["q"], e2["q"]])
     blocks = ocr.recognize_blocks(np.asarray(img)[:, :, ::-1].copy())
-    n_q, _, _, _, _ = tools_keju.resolve_fullscan(qbank, blocks, 70)
+    n_q, _, _, _, _ = tools_keju.resolve_questions(qbank, blocks, 70)
     fs_pass &= _selftest_report(
         n_q >= 2, n_q < 2, "双题检测",
         f"判定 {n_q} 道题(期望≥2,应播报提醒)")
@@ -246,8 +246,8 @@ def cmd_selftest(seed: int = SELFTEST_SEED) -> int:
         e0 = random.choice(qbank.entries)
     img = _render_fullscreen([e0["q"], e2["q"]])
     blocks = ocr.recognize_blocks(np.asarray(img)[:, :, ::-1].copy())
-    n_all, _, _, _, _ = tools_keju.resolve_fullscan(qbank, blocks, 70)
-    n_fix, entry_fix, _, note_fix, _ = tools_keju.resolve_fullscan(
+    n_all, _, _, _, _ = tools_keju.resolve_questions(qbank, blocks, 70)
+    n_fix, entry_fix, _, note_fix, _ = tools_keju.resolve_questions(
         qbank, blocks, 70, recent=[e0["n"]])
     suppressed_ok = (n_fix == 1 and entry_fix is not None
                      and entry_fix["a"] == e2["a"])
@@ -267,7 +267,7 @@ def cmd_selftest(seed: int = SELFTEST_SEED) -> int:
     narrow_target = next(e for e in qbank.entries if len(e["q"]) >= 18)
     nimg = _render_narrow(narrow_target["q"])
     nblocks = ocr.recognize_blocks(np.asarray(nimg)[:, :, ::-1].copy())
-    n_all, n_entry, n_score, _, _ = tools_keju.resolve_fullscan(qbank, nblocks, 65)
+    n_all, n_entry, n_score, _, _ = tools_keju.resolve_questions(qbank, nblocks, 65)
     ok = (n_all == 1 and n_entry is not None
           and n_entry["a"] == narrow_target["a"])
     got_n = f"{n_score:.0f}% -> {n_entry['a']}" if n_entry else "无"
@@ -289,7 +289,7 @@ def cmd_selftest(seed: int = SELFTEST_SEED) -> int:
     hdr_q = "御前科举大赛第9关：这一关考的是综合。题目：" + hx["q"]
     himg = _render_fullscreen([hdr_q])
     hblocks = ocr.recognize_blocks(np.asarray(himg)[:, :, ::-1].copy())
-    n_h, entry_h, score_h, _, _ = tools_keju.resolve_fullscan(qbank, hblocks, 70)
+    n_h, entry_h, score_h, _, _ = tools_keju.resolve_questions(qbank, hblocks, 70)
     ok = n_h == 1 and entry_h is not None and entry_h["a"] == hx["a"]
     got_h = f"{score_h:.0f}% -> {entry_h['a']}" if entry_h else "无"
     fs_pass &= _selftest_report(

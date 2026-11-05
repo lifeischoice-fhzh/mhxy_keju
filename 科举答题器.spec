@@ -1,9 +1,13 @@
 # -*- mode: python ; coding: utf-8 -*-
+import os
+
 from PyInstaller.utils.hooks import collect_all
 
 datas = [('data/keju_questions.json', 'data'),
-         ('data/keju_metadata.json', 'data'),
-         ('voice_cache', 'voice_cache')]
+         ('data/keju_metadata.json', 'data')]
+# 语音缓存是运行时生成的(答过的题才有),目录可整删;缺失时跳过不阻断打包
+if os.path.isdir('voice_cache'):
+    datas.append(('voice_cache', 'voice_cache'))
 binaries = []
 hiddenimports = ['PIL', 'rapidfuzz', 'mss']
 tmp_ret = collect_all('rapidocr_onnxruntime')

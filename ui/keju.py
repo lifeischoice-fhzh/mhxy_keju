@@ -1,268 +1,480 @@
-"""科举答题器主窗口 + 迷你答案窗(迷你窗归科举)。
+"""科举答题器主窗口(定稿模板 + 双皮肤)+ 迷你答案窗(归科举)。
 
 只负责建界面;按钮动作仍然回到 App 上的同名方法。
 """
 import core  # 间隔区间(MIN/MAX_INTERVAL)取自地基
+from tkinter import font as tkfont
 from ui import widgets as ui_widgets
+from ui.widgets import StatusDot, TextButton, round_pts
 
 # ---- 迷你置顶窗 ----
 MINI_FONT, MINI_FONT_MIN = 22, 11   # 默认字号 / 超长答案缩到的下限
 MINI_LABEL_MAX_W = 430              # 文案超过这个宽度就逐步缩字号
 MINI_MARGIN, MINI_TOP = 24, 36      # 默认停靠:屏幕右上角,留边距
 
-# ---- 收益物品:一行名称小标签 + 右下角 ×件数(图标那套已删,2026-10-16) ----
-ITEM_W = 46                         # 每个标签的宽度(px)
-ITEM_H = 22                         # 标签高度(px)
-ITEM_GAP = 6                        # 标签之间的间距(px)
-_BADGE_FONT = ("Microsoft YaHei UI", 8, "bold")
+# ---- 主窗:左竖排角色名 + 右上操作钮 + 题目识别区 ----
+WIN_W, WIN_H = 664, 232
+SIDE_W = 170                        # 左栏宽
+BOX_W, BOX_H = 146, 30              # 角色名框 / 客户端刷新按钮(同宽对齐)
+BOX_STEP = 36                       # 竖排步进(框高 30 + 间距 6)
+BTN_W, BTN_H, BTN_STEP = 88, 32, 94  # 右上操作钮:宽/高/步进
+MAIN_X = 182                        # 右区起始 x(左栏 170 + 12 间距)
+YH = "Microsoft YaHei UI"
+Q_FONT = (YH, 13)
+A_FONT = (YH, 36, "bold")
+
+# ---- 双皮肤:M1 玄夜(深)/ M4 玄白(浅),换肤按钮一键切换 ----
+SKINS = {
+    "dark": {   # 玄夜:近黑蓝底 + 翡翠绿
+        "bg": "#10141b", "panel": "#151a23", "card": "#151a23",
+        "line": "#232b38", "row": "#1b212c", "row_line": "#39455a",
+        "name": "#dfe5ee", "x": "#5f6b80", "x_hover": "#e5484d",
+        "txt": "#eef2f8", "sub": "#8b96a8",
+        "primary": {"bg": "#34b07c", "hover": "#3bc28a", "press": "#2b9a6d",
+                    "fg": "#0c1712"},
+        "ghost": {"bg": "#1b212c", "hover": "#232b38", "press": "#2a3342",
+                  "fg": "#aeb8c6"},
+        "answer": "#eef2f8",
+        "ph_doc": "#1d2430", "ph_line": "#333e4e",
+        "ph_text": "#5f6b80", "ph_sub": "#414c5c",
+        "mute": {"bg": "#3a1f24", "hover": "#46262c", "press": "#522b32",
+                 "fg": "#ff9b9b"},
+        "card_r": 12, "row_r": 9, "btn_r": 9,
+    },
+    "light": {  # 玄白:白纸黑字强对比
+        "bg": "#ffffff", "panel": "#f5f5f2", "card": "#ffffff",
+        "line": "#e6e6e0", "row": "#ffffff", "row_line": "#c8c8bd",
+        "name": "#141414", "x": "#b5b5ae", "x_hover": "#e5484d",
+        "txt": "#141414", "sub": "#8a8a84",
+        "primary": {"bg": "#141414", "hover": "#333333", "press": "#000000",
+                    "fg": "#ffffff"},
+        "ghost": {"bg": "#ffffff", "hover": "#f0f0ec", "press": "#e4e4de",
+                  "fg": "#333333"},
+        "answer": "#141414",
+        "ph_doc": "#f2f2ee", "ph_line": "#d9d9d2",
+        "ph_text": "#9a9a92", "ph_sub": "#b5b5ae",
+        "mute": {"bg": "#fdeaea", "hover": "#f9dcdc", "press": "#f4cccc",
+                 "fg": "#c0392b"},
+        "card_r": 6, "row_r": 15, "btn_r": 16,
+    },
+}
 
 
-def build(app):
-    """在 app.root 上建科举的界面。回调仍然指向 app 的方法。"""
+def _btn_pal(colors, font_size):
+    """从皮肤色生成 TextButton 调色板(含字号)。"""
+    pal = dict(colors)
+    pal["font"] = ((YH, font_size, "bold") if font_size >= 10
+                   else (YH, font_size))
+    return pal
+
+
+def mute_palette(skin, muted):
+    """静音钮的调色板:静音 = 红色系提醒,未静音 = 普通 ghost。"""
+    return _btn_pal(SKINS[skin]["mute" if muted else "ghost"], 10)
+
+
+def _draw_zhuangyuan(d):
+    """在 1024×1024 画布上画扁平状元帽(金色帽体 + 花瓣帽翅,缩到 256 抗锯齿)。"""
+    gold, gold_hi = (250, 200, 70, 255), (255, 228, 130, 255)
+    brim, red = (206, 138, 36, 255), (214, 60, 44, 255)
+    line, hi = (74, 46, 14, 255), (255, 240, 200, 255)
+
+    def petal(p0, p1, p2, w0, w1, color, steps=16):
+        # 花瓣形帽翅:贝塞尔曲线上铺一排渐大的圆,并集即两端圆头的瓣
+        for i in range(steps + 1):
+            t = i / steps
+            u = 1 - t
+            x = u * u * p0[0] + 2 * t * u * p1[0] + t * t * p2[0]
+            y = u * u * p0[1] + 2 * t * u * p1[1] + t * t * p2[1]
+            r = (w0 + (w1 - w0) * t) / 2
+            d.ellipse((x - r, y - r, x + r, y + r), fill=color)
+
+    # 帽翅:勾边打底再盖色,近水平胖瓣自帽身两侧外捅、微上翘,根部埋进帽体
+    for pts in (((345, 495), (250, 428), (128, 400)),
+                ((679, 495), (774, 428), (896, 400))):
+        petal(*pts, 198, 188, line)
+        petal(*pts, 170, 160, gold)
+    # 帽体:勾边打底 + 半圆帽顶 + 外撇帽身(金圈出边),下沿藏进帽沿后面
+    d.pieslice((238, 234, 786, 782), 180, 360, fill=line)
+    d.polygon([(238, 508), (786, 508), (828, 762), (198, 762)], fill=line)
+    d.pieslice((252, 248, 772, 768), 180, 360, fill=gold)
+    d.polygon([(252, 508), (772, 508), (812, 762), (212, 762)], fill=gold)
+    d.ellipse((330, 306, 650, 546), fill=gold_hi)   # 冠面柔光(斜上)
+    # 顶珠:半沉进帽顶的小金球
+    d.ellipse((462, 204, 562, 304), fill=line)
+    d.ellipse((470, 212, 554, 296), fill=gold)
+    d.ellipse((488, 232, 516, 260), fill=gold_hi)
+    # 帽沿 + 红宝
+    d.rounded_rectangle((182, 722, 842, 826), radius=52, fill=line)
+    d.rounded_rectangle((196, 736, 828, 812), radius=38, fill=brim)
+    d.ellipse((472, 734, 552, 814), fill=line)
+    d.ellipse((482, 744, 542, 804), fill=red)
+    d.ellipse((492, 756, 512, 776), fill=hi)
+
+
+def set_icon(root):
+    """窗口/任务栏图标:状元帽(科举夺魁),运行时画,无素材文件。
+
+    1024 高分辨率绘制 + LANCZOS 缩放抗锯齿,两路下发:
+    - iconphoto(True) 给多尺寸阶梯(16~256):设窗口类图标,连之后创建的
+      Toplevel(迷你窗)一起覆盖,各处取最贴近的尺寸,不让 Tk 现缩出脏边;
+    - WM_SETICON 直挂大/小 HICON:任务栏按钮只认这个,iconphoto 改的
+      类图标对已建好的按钮不刷新(按钮会一直显示 Python 终端图标);
+      尺寸按系统 DPI 的 SM_CXICON/SM_CXSMICON 取,高分屏不糊。
+    """
+    try:
+        from PIL import Image, ImageDraw, ImageTk
+        img = Image.new("RGBA", (1024, 1024), (0, 0, 0, 0))
+        _draw_zhuangyuan(ImageDraw.Draw(img))
+    except Exception:
+        return
+    photos = [ImageTk.PhotoImage(img.resize((s, s), Image.LANCZOS))
+              for s in (16, 20, 24, 32, 48, 64, 256)]
+    root._icon_imgs = photos          # 留引用,防 PhotoImage 被回收
+    root.iconphoto(True, *photos)
+    _set_taskbar_icon(root, img)
+
+
+def _set_taskbar_icon(root, img):
+    """WM_SETICON 给窗口挂大/小 HICON(任务栏真正认的口)。
+
+    时机:窗口未映射时 Tk 还没定真实 HWND,所以挂图标等 <Map> 事件
+    (pop_in 的 deiconify 会触发);已映射(换肤重建)则立即挂。
+    独占控制台启动时控制台窗也是我们的(双击/脚本拉起、没有终端共用),
+    顺手一起换成状元帽 —— 否则任务栏把控制台和主窗合成一颗按钮,显示
+    Python 终端图标。换肤重建时旧句柄先替换再回收。
+    """
+    import ctypes
+    from ctypes import wintypes
+
+    class _ICONINFO(ctypes.Structure):
+        _fields_ = [("fIcon", wintypes.BOOL), ("xHotspot", wintypes.DWORD),
+                    ("yHotspot", wintypes.DWORD), ("hbmMask", wintypes.HBITMAP),
+                    ("hbmColor", wintypes.HBITMAP)]
+
+    class _BMIH(ctypes.Structure):
+        _fields_ = [("biSize", wintypes.DWORD), ("biWidth", wintypes.LONG),
+                    ("biHeight", wintypes.LONG), ("biPlanes", wintypes.WORD),
+                    ("biBitCount", wintypes.WORD), ("biCompression", wintypes.DWORD),
+                    ("biSizeImage", wintypes.DWORD),
+                    ("biXPelsPerMeter", wintypes.LONG),
+                    ("biYPelsPerMeter", wintypes.LONG), ("biClrUsed", wintypes.DWORD),
+                    ("biClrImportant", wintypes.DWORD)]
+
+    try:
+        from PIL import Image
+        user32, gdi32, kernel32 = (ctypes.windll.user32, ctypes.windll.gdi32,
+                                   ctypes.windll.kernel32)
+        user32.GetSystemMetrics.argtypes = [ctypes.c_int]
+        user32.GetAncestor.argtypes = [wintypes.HWND, wintypes.UINT]
+        user32.SendMessageW.argtypes = [wintypes.HWND, wintypes.UINT,
+                                        wintypes.WPARAM, wintypes.LPARAM]
+        user32.CreateIconIndirect.restype = wintypes.HICON
+        user32.CreateIconIndirect.argtypes = [ctypes.POINTER(_ICONINFO)]
+        gdi32.CreateDIBSection.restype = wintypes.HBITMAP
+        gdi32.CreateDIBSection.argtypes = [
+            wintypes.HDC, ctypes.c_void_p, wintypes.UINT,
+            ctypes.POINTER(ctypes.c_void_p), wintypes.HANDLE, wintypes.DWORD]
+        gdi32.CreateBitmap.restype = wintypes.HBITMAP
+        gdi32.DeleteObject.argtypes = [ctypes.c_void_p]
+        user32.DestroyIcon.argtypes = [wintypes.HICON]
+        kernel32.GetConsoleWindow.restype = wintypes.HWND
+        kernel32.GetConsoleProcessList.argtypes = [
+            ctypes.POINTER(wintypes.DWORD), wintypes.DWORD]
+
+        def hicon(size):
+            rgba = img.resize((size, size), Image.LANCZOS)
+            bi = _BMIH(ctypes.sizeof(_BMIH), size, -size, 1, 32, 0)
+            bits = ctypes.c_void_p()
+            color = gdi32.CreateDIBSection(None, ctypes.byref(bi), 0,
+                                           ctypes.byref(bits), None, 0)
+            if not color or not bits:
+                return 0
+            ctypes.memmove(bits, rgba.tobytes("raw", "BGRA"), size * size * 4)
+            mask = gdi32.CreateBitmap(size, size, 1, 1, None)
+            hc = user32.CreateIconIndirect(
+                ctypes.byref(_ICONINFO(True, 0, 0, mask, color)))
+            gdi32.DeleteObject(color)
+            gdi32.DeleteObject(mask)
+            return hc
+
+        big = hicon(max(user32.GetSystemMetrics(11), 16))    # SM_CXICON
+        small = hicon(max(user32.GetSystemMetrics(49), 12))  # SM_CXSMICON
+
+        def apply_to(hwnd):
+            if hwnd:
+                user32.SendMessageW(hwnd, 0x80, 1, big)    # WM_SETICON 大
+                user32.SendMessageW(hwnd, 0x80, 0, small)  # WM_SETICON 小
+
+        old = getattr(root, "_icon_hicons", [])
+        root._icon_hicons = [big, small]
+
+        def fire(_event=None):
+            if root._icon_done:
+                return
+            root._icon_done = True
+            apply_to(user32.GetAncestor(root.winfo_id(), 2))  # GA_ROOT
+            con = kernel32.GetConsoleWindow()
+            if con:
+                pids = (wintypes.DWORD * 4)()
+                if (kernel32.GetConsoleProcessList(pids, 4) == 1
+                        and pids[0] == kernel32.GetCurrentProcessId()):
+                    apply_to(con)   # 独占控制台:任务栏合成按钮显示的是它
+
+        # 窗口未映射时 Tk 还没定真实 HWND(winfo_id 是临时句柄,映射即销毁),
+        # 直接挂会挂到死窗上 —— 必须等 <Map>;换肤重建时已映射,立即挂
+        root._icon_done = bool(root.winfo_ismapped())
+        if root._icon_done:
+            fire()
+        root.bind("<Map>", fire)
+        for h in old:
+            user32.DestroyIcon(h)
+    except Exception:
+        pass
+
+
+def build(app, skin="dark"):
+    """按皮肤建主窗(换肤 = 清空子件后整窗重建,见 apply_skin)。"""
     import tkinter as tk
-    from tkinter import ttk
 
-    app.root.title("科举答题器 · 梦幻西游")
-    ui_widgets.set_place(app.root, size=(880, 680))     # 居中
+    th = SKINS[skin]
+    app.skin = skin
+    app.root.title("风二与露娜")
+    set_icon(app.root)
+    app.root.resizable(False, False)
+    app.root.geometry(f"{WIN_W}x{WIN_H}")   # place 布局不产生请求尺寸,窗要显式定
+    ui_widgets.set_place(app.root, size=(WIN_W, WIN_H))
+    app.root.configure(bg=th["bg"])
 
-    # ---- 配色与样式(扁平卡片风,用 ui/widgets 里那一份) ----
-    th = ui_widgets.apply_theme()
-    BG, CARD = th["bg"], th["card"]
-    ACCENT, TXT, SUB = th["accent"], th["txt"], th["sub"]
-    BORDER = th["border"]
-    app.root.configure(bg=BG)
-
-    def card(title):
-        outer = tk.Frame(app.root, bg=BORDER, highlightthickness=0)
-        outer.pack(fill="x", padx=12, pady=(10, 0))
-        inner = tk.Frame(outer, bg=CARD)
-        inner.pack(fill="both", expand=True, padx=1, pady=1)
-        ttk.Label(inner, text=title, style="Section.TLabel",
-                  padding=(12, 8, 12, 0)).pack(anchor="w")
-        body = ttk.Frame(inner, padding=(12, 6, 12, 12))
-        body.pack(fill="both", expand=True)
-        return outer, body
-
-    # ---- 客户端(自动定位,只读显示) ----
-    _, sec1 = card("客户端")
-    app.region_vars = []
-    slots = ttk.Frame(sec1)
-    slots.pack(fill="x")
-    slots.columnconfigure(0, weight=1, uniform="slot")
-    slots.columnconfigure(1, weight=1, uniform="slot")
+    # 左栏:角色名竖排(× 删单个)+ 客户端刷新(替代原定位按钮)
+    side = tk.Frame(app.root, width=SIDE_W, height=WIN_H, bg=th["panel"],
+                    highlightthickness=0)
+    side.place(x=0, y=0, width=SIDE_W, height=WIN_H)  # 显式定高:刷新钮才会露出
+    app.client_capsules = []
     for i in range(core.MAX_CLIENTS):
-        row, col = divmod(i, 2)
-        box = tk.Frame(slots, bg="#f7f9fc", highlightbackground=BORDER,
-                       highlightthickness=1)
-        box.grid(row=row, column=col, sticky="ew",
-                 padx=(0, 8) if col == 0 else (8, 0), pady=3)
-        ttk.Label(box, text=f"客户端{i + 1}", style="Slot.TLabel").pack(
-            side="left", padx=(10, 6), pady=5)
-        var = tk.StringVar(value="未定位")
-        ttk.Label(box, textvariable=var, style="Slot.TLabel").pack(
-            side="left", fill="x", expand=True)
-        app.region_vars.append(var)
-
-    bar = ttk.Frame(sec1)
-    bar.pack(fill="x", pady=(10, 0))
-    app.autolocate_btn = ttk.Button(bar, text="自动定位客户端",
-                                    command=app.on_autolocate)
-    app.autolocate_btn.pack(side="left")
-    ttk.Button(bar, text="清除全部", style="Danger.TButton",
-               command=app.on_clear_regions).pack(side="left", padx=(8, 0))
-    app.hint_label = ttk.Label(
-        bar, style="Hint.TLabel",
-        text=(f"定位整个客户端窗口;最多 {core.MAX_CLIENTS} 个,"
-              "多出的舍弃;最小分辨率效率最高"))
-    app.hint_label.pack(side="left", padx=(10, 0))
-
-    mbar = ttk.Frame(sec1)
-    mbar.pack(fill="x", pady=(10, 0))
-    ttk.Label(mbar, text="识别模式:").pack(side="left")
-    app.mode_keju_btn = ttk.Button(
-        mbar, text="御前科举",
-        command=lambda: app._set_exam_mode(True))
-    app.mode_keju_btn.pack(side="left", padx=(8, 6))
-    app.mode_plain_btn = ttk.Button(
-        mbar, text="三大学士",
-        command=lambda: app._set_exam_mode(False))
-    app.mode_plain_btn.pack(side="left")
-    app._refresh_mode_btn()
+        cv = tk.Canvas(side, width=BOX_W, height=BOX_H,
+                       highlightthickness=0, bg=th["panel"])
+        cv.grid(row=i, column=0, padx=(12, 12), pady=(12 if i == 0 else 0, 6))
+        app.client_capsules.append(cv)
+    app.refresh_btn = TextButton(
+        side, "客户端刷新", app.on_autolocate,
+        palette=_btn_pal(th["primary"], 10), width=BOX_W, height=BOX_H,
+        radius=th["btn_r"], bg=th["panel"])
+    app.refresh_btn.place(x=12, y=12 + core.MAX_CLIENTS * BOX_STEP)
+    # 左栏空态占位:没定位到客户端时显示(见 refresh_capsules / draw_side_ph)
+    app.side_ph = tk.Canvas(side, width=BOX_W, height=150,
+                            highlightthickness=0, bg=th["panel"])
+    app.side_ph.place(x=12, y=18)
     app._refresh_regions()
 
-    # ---- 识别与播报 ----
-    _, sec2 = card("识别与播报")
-    bar1 = ttk.Frame(sec2)
-    bar1.pack(fill="x")
-    ttk.Button(bar1, text="手动识别",
-               command=app.on_manual_cycle).pack(side="left")
-    ttk.Button(bar1, text="全屏扫描",
-               command=app.on_fullscan).pack(side="left", padx=8)
-    ttk.Button(bar1, text="迷你置顶",
-               command=app.on_mini).pack(side="left")
-    ttk.Button(bar1, text="播报试听",
-               command=app.on_test_tts).pack(side="left", padx=(8, 0))
-    ttk.Button(bar1, text="更新题库",
-               command=app.on_update_bank).pack(side="left", padx=(8, 0))
-    app.mute_btn = ttk.Button(bar1, text="静音: 关", width=8,
-                              command=app.on_toggle_mute)
-    app.mute_btn.pack(side="left", padx=(8, 0))
+    # 右上:操作按钮依次排开(御前科举 = 模式切换钮,点一下切换)
+    pal_p = _btn_pal(th["primary"], 10)
+    pal_g = _btn_pal(th["ghost"], 10)
+    app.mode_btn = TextButton(app.root, "御前科举", app.on_toggle_mode,
+                              palette=pal_p)
+    app.mode_btn.place(x=MAIN_X, y=12)
+    app.manual_btn = TextButton(app.root, "手动识别", app.on_manual_scan,
+                                palette=pal_g)
+    app.mini_btn = TextButton(app.root, "迷你置顶", app.on_mini,
+                              palette=pal_g)
+    app.tts_btn = TextButton(app.root, "播报试听", app.on_test_tts,
+                             palette=pal_g)
+    app.mute_btn = TextButton(app.root, "语音静音", app.on_toggle_mute,
+                              palette=pal_g)
+    for k, btn in enumerate((app.manual_btn, app.mini_btn, app.tts_btn,
+                             app.mute_btn)):
+        btn.place(x=MAIN_X + (k + 1) * BTN_STEP, y=12)
+    app._refresh_mode_btn()
     app._refresh_mute_btn()
-    bar2 = ttk.Frame(sec2)
-    bar2.pack(fill="x", pady=(10, 0))
-    app.watch_btn = ttk.Button(bar2, text="自动监听: 关",
-                               command=app.on_toggle_watch)
-    app.watch_btn.pack(side="left")
-    ttk.Label(bar2, text="监听间隔").pack(side="left", padx=(18, 5))
-    app.interval_var = tk.StringVar(
-        value=f"{float(app._get('interval', core.MIN_INTERVAL)):.1f}")
-    ttk.Spinbox(bar2, from_=core.MIN_INTERVAL, to=core.MAX_INTERVAL,
-                increment=0.1,
-                width=5, textvariable=app.interval_var,
-                command=app._save_interval).pack(side="left")
-    ttk.Label(bar2, text="秒").pack(side="left", padx=(4, 0))
-    ttk.Label(bar2, style="Hint.TLabel",
-              text="空闲时轮询,出现题目后自动加快到 0.1 秒;多开可调大省 CPU").pack(
-                  side="left", padx=(16, 0))
 
-    # ---- 日志 ----
-    outer, sec4 = card("日志")
-    outer.pack_configure(expand=True, fill="both")
-    sbar = ttk.Frame(sec4)
-    sbar.pack(fill="x", pady=(0, 6))
-    app.round_var = tk.StringVar(value="本局: 0 题")
-    ttk.Label(sbar, textvariable=app.round_var,
-              style="Info.TLabel").pack(side="left")
-    ttk.Button(sbar, text="重置统计", width=9, style="SlotClose.TButton",
-               command=app.on_reset_stats).pack(side="right")
-    app.clear_log_btn = ttk.Button(sbar, text="清空日志", width=9,
-                                   style="SlotClose.TButton",
-                                   command=app.on_clear_log)
-    app.clear_log_btn.pack(side="right", padx=(0, 6))
-    # 总收益:一行银两 + 一行物品图标(逐轮明细收进「收益明细」按钮)
-    earn = ttk.Frame(sec4)
-    earn.pack(fill="x", pady=(0, 2))
-    app.reward_var = tk.StringVar(value="收益：—")
-    ttk.Label(earn, textvariable=app.reward_var,
-              style="Hint.TLabel").pack(side="left")
-    app.earn_detail_btn = ttk.Button(earn, text="收益明细", width=9,
-                                     command=app.on_earn_detail)
-    app.earn_detail_btn.pack(side="right", padx=(6, 0))
-    irow = ttk.Frame(sec4)
-    irow.pack(fill="x", pady=(0, 4))
-    ttk.Label(irow, text="物品：", style="Hint.TLabel").pack(side="left")
-    app.reward_items_canvas = tk.Canvas(irow, height=ITEM_H + 6,
-                                        highlightthickness=0, bg=CARD)
-    app.reward_items_canvas.pack(side="left", fill="x", expand=True)
-    app.log_box = tk.Text(sec4, height=12, wrap="word",
-                          font=("Microsoft YaHei UI", 10),
-                          relief="flat", background="#fafbfd",
-                          foreground=TXT, insertbackground=ACCENT,
-                          padx=10, pady=8,
-                          highlightthickness=1,
-                          highlightbackground=BORDER,
-                          highlightcolor=BORDER)
-    app.log_box.pack(side="left", fill="both", expand=True)
-    sb = ttk.Scrollbar(sec4, command=app.log_box.yview)
-    sb.pack(side="right", fill="y")
-    app.log_box.configure(yscrollcommand=sb.set, state="disabled")
-    app.log_box.tag_config("rec", foreground="#6b7688")
-    # 只有"认出题目、给出答案"那一行高亮:绿字加粗;其余全是默认色
-    app.log_box.tag_config("match", foreground="#0a7d3f",
-                           font=("Microsoft YaHei UI", 11, "bold"))
+    # 题目识别区:白卡 + 题目/大字答案;没信息时画占位(见 draw_hero)
+    app.hero_canvas = tk.Canvas(app.root, width=WIN_W - 12 - MAIN_X,
+                                height=WIN_H - 12 - 52, bg=th["bg"],
+                                highlightthickness=0)
+    app.hero_canvas.place(x=MAIN_X, y=52)
+    # 状态灯:监听中绿点闪烁 / 未监听红点常亮(叠在题目卡右上角)
+    app.status_dot = StatusDot(app.root, d=10, bg=th["card"])
+    app.status_dot.place(x=WIN_W - 28, y=62)
+    # 换肤:玄夜 / 玄白 一键切换(选择记进配置,下次启动沿用)
+    app.skin_btn = TextButton(
+        app.root, "换肤", app.on_toggle_skin,
+        palette=_btn_pal(th["ghost"], 9), width=52, height=22,
+        radius=7, bg=th["card"])
+    app.skin_btn.place(x=572, y=58)
+    draw_hero(app.hero_canvas, "", "", skin)
 
-    tk.Label(app.root, bg=BG, fg=SUB, font=("Microsoft YaHei UI", 9),
-             text="使用: 启动即自动定位客户端 → 打开自动监听即可;两种答题"
-                  "界面用上面的“识别模式”按钮切换").pack(
-                      fill="x", padx=14, pady=8)
+
+def fit_text(text, font, maxw):
+    """按像素宽度截断文本,超出部分以 … 结尾。"""
+    f = font if isinstance(font, tkfont.Font) else tkfont.Font(font=font)
+    if f.measure(text) <= maxw:
+        return text
+    while text and f.measure(text + "…") > maxw:
+        text = text[:-1]
+    return text + "…"
+
+
+def draw_hero(cv, question, answer, skin="dark"):
+    """重画题目识别区:卡片 + 题目(超宽加 …)+ 大字答案。
+
+    没有任何信息时画占位:小文档图形 + 「等待识别…」。
+    """
+    th = SKINS[skin]
+    cv.delete("all")
+    w, h = int(cv["width"]), int(cv["height"])
+    cv.create_polygon(round_pts(1, 1, w - 1, h - 1, th["card_r"]), smooth=True,
+                      fill=th["card"], outline=th["line"], width=1)
+    if not question and not answer:
+        cx, gy = w / 2, h / 2 - 60
+        cv.create_polygon(round_pts(cx - 21, gy, cx + 21, gy + 54, 6),
+                          smooth=True, fill=th["ph_doc"],
+                          outline=th["ph_line"], width=1)
+        for k, ln in enumerate((16, 27, 38)):
+            cv.create_line(cx - 11, gy + ln, cx + (11 if k == 2 else 13),
+                           gy + ln, fill=th["ph_line"], width=2,
+                           capstyle="round")
+        cv.create_text(cx, gy + 76, text="等待识别…",
+                       font=(YH, 11, "bold"), fill=th["ph_text"])
+        cv.create_text(cx, gy + 96, text="识别到题目后会自动显示在这里",
+                       font=(YH, 9), fill=th["ph_sub"], tags="ph")
+        return
+    q = fit_text(question, Q_FONT, w - 48)
+    cv.create_text(24, 42, text=q, font=Q_FONT, fill=th["sub"], anchor="w",
+                   tags="q")
+    a = fit_text(answer or "—", A_FONT, w - 48)
+    cv.create_text(24, 96, text=a, font=A_FONT, fill=th["answer"],
+                   anchor="w", tags="a")
+
+
+def apply_skin(app, skin):
+    """换肤:清掉主窗全部子件按新皮肤重建;迷你窗若开着也重开成新配色。
+
+    迷你窗是 root 的子窗,destroy 一并没了;重建时保留用户拖过的位置
+    (_mini_user_pos),只重置自己刚记的锚点,免得把旧锚误判成用户挪过。
+    """
+    app.skin = skin
+    for w in app.root.winfo_children():
+        w.destroy()
+    build(app, skin)
+    app._hero_shown = None          # 让刷新链立刻按新皮肤重画题目区
+    if getattr(app, "mini", None) is not None:
+        app._mini_anchor = None
+        app.mini = None
+        build_mini(app)
+        app._anchor_mini()
 
 
 def build_mini(app):
-    """建迷你答案窗(app.mini / app.mini_var / app.mini_label),归科举。"""
-    import tkinter as tk
-    from tkinter import ttk
+    """建迷你答案窗(app.mini / app.mini_var / app.mini_label),归科举。
 
+    无边框(overrideredirect):系统标题栏在 DPI 感知进程里拖不动
+    (Tk 8.6 的非客户区事件进不了绑定,探针实测),索性去掉 ——
+    整个窗面抓着就能拖,还原走窗上的「还原」按钮。
+    配色跟主窗皮肤(SKINS):卡片底 + 1px 描边 + 圆角钮,没有 ttk 默认灰。
+    """
+    import tkinter as tk
+
+    th = SKINS[getattr(app, "skin", "light")]
     m = tk.Toplevel(app.root)
-    m.title("科举答案")
     m.attributes("-topmost", True)
+    m.overrideredirect(True)
     m.resizable(False, False)
+    m.configure(bg=th["row_line"])     # 1px 描边:深色场景里分得清窗界
+    body = tk.Frame(m, bg=th["row"], cursor="fleur")
+    body.pack(fill="both", expand=True, padx=1, pady=1)
     app.mini_var = tk.StringVar(value="—")
-    app.mini_label = ttk.Label(m, textvariable=app.mini_var,
-                               font=("Microsoft YaHei", MINI_FONT, "bold"),
-                               foreground="#12603a", padding=(16, 8))
+    app.mini_label = tk.Label(body, textvariable=app.mini_var,
+                              font=("Microsoft YaHei", MINI_FONT, "bold"),
+                              fg=th["answer"], bg=th["row"],
+                              padx=14, pady=7, cursor="fleur")
     app.mini_label.pack(side="left")
-    side = ttk.Frame(m)
-    side.pack(side="left", padx=(0, 12))
-    ttk.Button(side, text="还原", width=6,
-               command=app.on_restore).pack(pady=(6, 2))
-    m.protocol("WM_DELETE_WINDOW", app.on_restore)
+    TextButton(body, "还原", app.on_restore,
+               palette=_btn_pal(th["primary"], 10),
+               width=64, height=30, radius=th["btn_r"],
+               bg=th["row"]).pack(side="left", padx=(0, 10), pady=8)
+    # 抓着窗面拖动(body 空白 / 大字都算;按钮自己吃掉点击,不受影响)
+    for w in (body, app.mini_label):
+        w.bind("<Button-1>", app.on_mini_drag_start)
+        w.bind("<B1-Motion>", app.on_mini_drag_move)
     app.mini = m
 
 
-def draw_reward_items(app, items):
-    """把「物品：」那行画出来:名称小标签 + 右下角 ×件数。
+def _draw_capsule(cv, i, name, on_remove, th):
+    """重画第 i 个角色名框(只画已定位的):全名 + × 删除(悬停变红)。
 
-    items 是 [(物品名, 件数), ...](按件数降序)。图标那套(自动采集 + data/items)
-    2026-10-16 按用户要求整个删掉了,只剩标签 —— 统计不受影响。
+    多边形内缩 1px:贴边画的描边下半像素会被画布裁掉(下边框消失);
+    文字按 bbox 实测垂直居中 —— 中文字形在行框里偏上,固定偏移猜不准。
     """
-    cv = getattr(app, "reward_items_canvas", None)
-    if cv is None or not cv.winfo_exists():
-        return
+    w, h = int(cv["width"]), int(cv["height"])
     cv.delete("all")
-    # 一行放不下就换行(物品多的时候);宽度未知(窗口还没显示)按一行算
-    width = max(cv.winfo_width(), ITEM_W * 2 + 4)
-    x, y = 2, 3
-    row_h = ITEM_H + 4
-    for name, cnt in items or []:
-        if x + ITEM_W > width and x > 2:
-            x, y = 2, y + row_h
-        cv.create_rectangle(x, y, x + ITEM_W, y + ITEM_H,
-                            fill="#eef2f8", outline="#d7dee8")
-        cv.create_text(x + ITEM_W // 2, y + ITEM_H // 2, text=name[:6],
-                       width=ITEM_W - 2, font=("Microsoft YaHei UI", 8),
-                       fill="#5b6675")
-        txt = f"×{cnt}"
-        bw = 8 + 6 * len(txt)
-        cv.create_rectangle(x + ITEM_W - bw, y + ITEM_H - 12,
-                            x + ITEM_W + 1, y + ITEM_H + 1,
-                            fill="#12203a", outline="")
-        cv.create_text(x + ITEM_W - 2, y + ITEM_H - 1, text=txt,
-                       anchor="se", fill="#ffd54a", font=_BADGE_FONT)
-        x += ITEM_W + ITEM_GAP
-    cv.configure(height=y - 3 + ITEM_H + 3,
-                 scrollregion=(0, 0, width, y - 3 + ITEM_H + 3))
+    cv.create_polygon(round_pts(1, 1, w - 1, h - 1, th["row_r"]), smooth=True,
+                      fill=th["row"], outline=th["row_line"], width=1)
+
+    def _vcenter(item):
+        bb = cv.bbox(item)
+        if bb:
+            cv.move(item, 0, h / 2 - (bb[1] + bb[3]) / 2)
+
+    label = (name or f"客户端{i + 1}")[:6]
+    _vcenter(cv.create_text(12, h // 2, text=label, font=(YH, 10),
+                            fill=th["name"], tags="name", anchor="w"))
+    _vcenter(cv.create_text(w - 12, h // 2, text="×", font=(YH, 12, "bold"),
+                            fill=th["x"], tags="x", anchor="c"))
+    cv.tag_bind("x", "<Button-1>", on_remove)
+    cv.tag_bind("x", "<Enter>",
+                lambda _e: (cv.configure(cursor="hand2"),
+                            cv.itemconfig("x", fill=th["x_hover"])))
+    cv.tag_bind("x", "<Leave>",
+                lambda _e: (cv.configure(cursor=""),
+                            cv.itemconfig("x", fill=th["x"])))
 
 
-def open_earn_detail(app):
-    """收益明细窗:每一轮的用时 / 银两 / 物品。只建控件;刷新/关闭归 App。"""
-    import tkinter as tk
-    from tkinter import ttk
+def draw_side_ph(cv, th):
+    """左栏空态占位:没定位到客户端时,画文档图形 + 提示文字。"""
+    cv.delete("all")
+    w = int(cv["width"])
+    cv.create_polygon(round_pts(1, 1, w - 1, int(cv["height"]) - 1, 10),
+                      smooth=True, fill=th["ph_doc"], outline=th["ph_line"],
+                      width=1)
+    cx = w / 2
+    cv.create_polygon(round_pts(cx - 14, 18, cx + 14, 54, 5), smooth=True,
+                      fill=th["card"], outline=th["ph_line"], width=1)
+    for k, ln in enumerate((28, 35, 42)):
+        cv.create_line(cx - 7, ln, cx + (7 if k == 2 else 9), ln,
+                       fill=th["ph_line"], width=2, capstyle="round")
+    cv.create_text(cx, 72, text="未找到客户端", font=(YH, 10, "bold"),
+                   fill=th["ph_text"])
+    cv.create_text(cx, 90, text="启动游戏后点下方按钮", font=(YH, 8),
+                   fill=th["ph_sub"], tags="ph")
 
-    win = getattr(app, "earn_detail_win", None)
-    if win is not None and win.winfo_exists():
-        win.lift()
+
+def refresh_capsules(app, regions, names):
+    """App 调:定位到几个客户端就画几个名字框(最多 MAX_CLIENTS)。
+
+    一个都没有时名字框全藏,显示左栏占位图。区域列表在删除/跟随/自动定位
+    后始终是"非空前缀",所以数量 = 非空个数。只画不改状态;× 的点击回调
+    指向 app.on_remove_client(i)。
+    """
+    th = SKINS[getattr(app, "skin", "dark")]
+    regions = list(regions or []) + [None] * core.MAX_CLIENTS
+    n = sum(1 for r in regions if r)
+    ph = getattr(app, "side_ph", None)
+    if n == 0:
+        for cv in getattr(app, "client_capsules", []):
+            cv.delete("all")
+            cv.grid_remove()
+        if ph:
+            draw_side_ph(ph, th)
+            ph.place(x=12, y=18)
         return
-    win = tk.Toplevel(app.root)
-    win.title("收益明细 · 每一轮")
-    ui_widgets.set_place(win, size=(620, 320),
-                         ref=ui_widgets.window_box(app.root))
-    win.transient(app.root)
-    app.earn_detail_win = win
-    ui_widgets.pop_in(win, xy=win.p_xy)
-
-    bar = ttk.Frame(win, padding=(10, 8))
-    bar.pack(fill="x")
-    ttk.Label(bar, text="每一轮的用时 / 银两 / 物品",
-              style="Section.TLabel").pack(side="left")
-    txt = tk.Text(win, wrap="none", relief="flat", background="#fafbfd",
-                  foreground="#1f2a3a", padx=10, pady=8,
-                  font=("Microsoft YaHei UI", 10))
-    txt.pack(fill="both", expand=True, padx=10, pady=(0, 10))
-
-    ttk.Button(bar, text="刷新", width=6,
-               command=app.on_earn_detail_refresh).pack(side="right")
-    ttk.Button(bar, text="关闭", width=6,
-               command=app.on_earn_detail_close).pack(side="right", padx=(0, 6))
-    win.bind("<Escape>", lambda e: app.on_earn_detail_close())
-    app.earn_detail_text = txt
-    app.on_earn_detail_refresh()
+    if ph:
+        ph.place_forget()
+    for i, cv in enumerate(getattr(app, "client_capsules", [])):
+        if i >= n:
+            cv.delete("all")
+            cv.grid_remove()
+            continue
+        cv.grid()
+        name = names[i] if i < len(names or []) else None
+        _draw_capsule(cv, i, name,
+                      lambda _e, i=i: app.on_remove_client(i), th)

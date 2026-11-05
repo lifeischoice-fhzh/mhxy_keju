@@ -177,6 +177,7 @@ def main(argv=None):
         size = EXE.stat().st_size / 1024 / 1024
         say(f"完成: {EXE}")
         say(f"  {size:.1f} MB,耗时 {time.time() - t0:.0f}s")
+        shutil.rmtree(ROOT / "build", ignore_errors=True)   # 中间产物不留
         ok = True
         return 0
     finally:

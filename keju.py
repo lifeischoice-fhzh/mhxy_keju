@@ -34,6 +34,19 @@ def _ensure_console():
             pass
 
 
+def _single_instance() -> bool:
+    """GUI 只许开一个:已有实例在跑时返回 False(弹框退路在 main)。
+
+    命名互斥体由系统在进程退出时自动释放,这里刻意不 CloseHandle ——
+    句柄得活满整个进程生命周期,提前关等于没锁。WinDLL(use_last_error
+    =True)拿到的才是 CreateMutexW 自己的错误码(183=ERROR_ALREADY_EXISTS)。
+    """
+    import ctypes
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    k32.CreateMutexW(None, False, "Global\\MHXY_KEJU_ANSWERER_MUTEX")
+    return ctypes.get_last_error() != 183    # 183 = ERROR_ALREADY_EXISTS
+
+
 def main():
     ap = argparse.ArgumentParser(description="梦幻西游科举答题器")
     ap.add_argument("--selftest", action="store_true", help="OCR+匹配自检(合成图片)")
@@ -52,10 +65,18 @@ def main():
     ap.add_argument("--update-bank", action="store_true", help="检查并更新题库")
     args = ap.parse_args()
 
-    if (args.selftest or args.tts_test or args.stats or args.update_bank
-            or args.uncollected is not None or args.rewards
-            or args.build_voice_cache is not None):
+    cli_mode = (args.selftest or args.tts_test or args.stats or args.update_bank
+                or args.uncollected is not None or args.rewards
+                or args.build_voice_cache is not None)
+    if cli_mode:
         _ensure_console()          # 打包版才有意义,源码运行无副作用
+    else:
+        # 工具只许开一个:已有实例就弹框退场(命令行工具模式不拦,方便并用)
+        import ctypes
+        if not _single_instance():
+            ctypes.windll.user32.MessageBoxW(
+                0, "科举答题器已经在运行,不能重复打开。", "科举答题器", 0x40)
+            return 0
     core.ensure_data_files()
 
     missing = core.check_deps()

@@ -38,6 +38,7 @@ DEFAULT_CONFIG = {
     "volume": 1.0,
     "interval": 0.4,     # 空闲时的轮询间隔(秒),下限 0.4:有题目后自动加快到 0.1
     "mute": False,       # 静音:不出声,界面照旧显示答案
+    "skin": "dark",      # 界面皮肤:dark=玄夜(深) / light=玄白(浅),右上「换肤」切换
     "voice_hint": "",    # 声音:本地=声音名关键字;云端=edge语音ID;空=自动
     "tts_backend": "edge",  # edge=云端神经语音(清晰,需联网) / sapi=本地系统语音
     "pitch": 15,         # 音调提升(Hz):短答案更清亮,0=不改
@@ -67,9 +68,8 @@ CLOUD_VOICES = {
     "云端·晓晓(女声)": "zh-CN-XiaoxiaoNeural",
 }
 
-# 固定文案只留这一份:播报点(tools/keju.py 的全屏扫描、gui 的"播报试听")
-# 和语音缓存清理的合法清单(prune_voice_cache)都按它算,改文案一处生效。
-SAY_MULTI_QUESTION = "请保证屏幕里只有一个题目"
+# 固定文案只留这一份:gui 的"播报试听"与语音缓存清理的合法清单
+# (prune_voice_cache)都按它算,改文案一处生效。
 SAY_TTS_TEST = "语音测试,C铁观音,唐朝"
 
 
@@ -267,7 +267,7 @@ os.makedirs(os.path.join(BASE_DIR, "data"), exist_ok=True)
 
 CONFIG_SECTIONS = {
     "app": ("volume", "mute", "voice_hint", "tts_backend", "pitch", "use_gpu",
-            "last_bank_check"),
+            "last_bank_check", "skin"),
     "keju": ("regions", "interval", "exam_mode", "bank_activities"),
 }
 _KEY_SECTION = {k: s for s, ks in CONFIG_SECTIONS.items() for k in ks}
@@ -276,26 +276,6 @@ _KEY_SECTION = {k: s for s, ks in CONFIG_SECTIONS.items() for k in ks}
 def key_section(key: str):
     """配置键 -> 分区名;认不出的键返回 None(调用方自行兜底/告警)。"""
     return _KEY_SECTION.get(key)
-
-
-# 日志归属:界面上的日志框只显示"本功能 + 公共"的行,别的来源的行只进文件。
-# 判断靠消息里的 [模块] 前缀 —— 前缀就是各处自己写的,不用每个调用点都带参数。
-LOG_SCOPE = {
-    "keju": ("科举", "题目对话框", "全屏扫描", "识别模式", "自动监听",
-             "统计", "奖励", "客户端", "提示"),
-}
-
-
-def log_scope(msg: str) -> str:
-    """一条日志属于哪个功能;返回 "" 表示公共的(界面上也该看到)。"""
-    m = re.match(r"\[([^\]\s]+)", (msg or "").strip())
-    if not m:
-        return ""
-    tag = m.group(1)
-    for scope, tags in LOG_SCOPE.items():
-        if any(tag.startswith(t) for t in tags):
-            return scope
-    return ""
 
 
 def split_config(cfg: dict) -> dict:
@@ -435,20 +415,87 @@ CLIENT_WINDOW_CLASS = "MHXYMainFrame"
 CLIENT_WINDOW_TITLE = "梦幻西游 ONLINE"
 CLIENT_MIN_W, CLIENT_MIN_H = 400, 300     # 比这还小就不可能是客户端画面
 
-# 游戏里可选的 4 档分辨率(社区资料):640x480 / 860x600 / 1024x768 / 1024x768(HD)
-GAME_RES_STEPS = ((640, 480), (860, 600), (1024, 768))
+# 游戏分辨率档(用户口径):640×480 / 800×600 受支持;1024×768/HD 不再支持。
+# 档位与文案按 96-DPI 逻辑像素算(见 GAME_DPI/_logical);860×600 的窗口
+# 按面积自然归到 800×600 档,同样放行
+GAME_RES_STEPS = ((640, 480), (800, 600), (1024, 768))
 MIN_GAME_RES = GAME_RES_STEPS[0]          # 最小档:整窗口截图最快,实测最划算
+
+GAME_DPI = 96    # 游戏窗口所在显示器的有效 DPI(125% 缩放=120);枚举时刷新
+
+
+def _logical(box):
+    """物理像素矩形 -> 游戏设置口径(96-DPI 逻辑)的同形矩形。
+
+    游戏是 DPI-unaware 的:它眼里 800×600 的窗口,在 125% 缩放的屏幕上
+    物理是 1015×828(感知进程量到的就是这个)。档位判定必须折算回逻辑值,
+    截图与区域坐标仍是物理值(mss 要物理像素),别混。
+    """
+    if GAME_DPI == 96:
+        return box
+    k = 96.0 / GAME_DPI
+    return [round(v * k) for v in box]
+
+
+def _logical_size(box):
+    """折算到逻辑口径后的 (宽, 高) 与按面积就近归到的分辨率档。
+
+    游戏是 DPI-unaware 的:它眼里 800×600 的窗口,在 125% 缩放的屏幕上
+    物理是 1015×828(感知进程量到的就是这个)。档位判定必须折算回逻辑值,
+    截图与区域坐标仍是物理值(mss 要物理像素),别混。
+    窗口可以被拉伸,所以按面积取最接近的一档来猜。
+    """
+    b = _logical(box)
+    w = max(1, int(b[2]) - int(b[0]))
+    h = max(1, int(b[3]) - int(b[1]))
+    step = min(GAME_RES_STEPS, key=lambda r: abs(r[0] * r[1] - w * h))
+    return w, h, step
 
 
 def client_size_info(box):
     """客户端像素尺寸 -> (尺寸说明文字, 是否已经是最小分辨率)。
 
-    窗口可以被拉伸,所以按面积取最接近的一档来猜;猜不到最小档就提醒用户调小。
+    猜不到最小档就提醒用户调小;数字与游戏设置界面对得上(见 _logical)。
     """
-    w = max(1, int(box[2]) - int(box[0]))
-    h = max(1, int(box[3]) - int(box[1]))
-    step = min(GAME_RES_STEPS, key=lambda r: abs(r[0] * r[1] - w * h))
+    w, h, step = _logical_size(box)
     return f"{w}×{h} ≈ {step[0]}×{step[1]} 档", step == MIN_GAME_RES
+
+
+# 只支持两档(2026-11-05):1024×768/HD 与其它尺寸不再定位 —— 识别慢、字也小,
+# 定位时直接跳过并弹框说明。归到这两档的都算支持(窗口被拉伸过也算)。
+SUPPORTED_RES = set(GAME_RES_STEPS[:2])    # (640,480) / (800,600)
+
+
+def supported_res_text():
+    """「640×480 / 800×600」这样的支持档文案,提示日志与弹框共用一份。"""
+    return " / ".join(f"{w}×{h}" for w, h in sorted(SUPPORTED_RES))
+
+
+def client_supported(box):
+    """客户端尺寸是否属于支持的两档(640×480 / 800×600)。
+
+    与 client_size_info 同一套"按面积就近归档":归到哪档就按哪档算。
+    """
+    return _logical_size(box)[2] in SUPPORTED_RES
+
+
+def client_name(title):
+    """从客户端窗口标题抠角色名:「… - (区服[服] - 名字[id])」取最后一段。
+
+    「梦幻西游 ONLINE - (湖北2区[黄鹤楼] - 祭花′[29024311])」->「祭花′」:
+    取最后一个 - 之后,截到第一个 [,再去掉两端的括号和空格。
+    标题里没有 -(还没进角色的登录窗口就只有「梦幻西游 ONLINE」)或抠出来
+    是空的,返回空串 —— 界面那格退回显示「客户端N」。
+    """
+    t = str(title or "")
+    if "-" not in t:
+        return ""
+    seg = t.rsplit("-", 1)[1].split("[", 1)[0].strip()
+    while seg and seg[0] in "()()「」":
+        seg = seg[1:]
+    while seg and seg[-1] in "()()「」":
+        seg = seg[:-1]
+    return seg
 
 
 def can_follow_clients(boxes, auto_boxes):
@@ -463,8 +510,10 @@ def find_client_windows():
     """枚举梦幻西游客户端窗口。
 
     返回 ([(标题, [x1,y1,x2,y2]), ...], [已最小化的窗口标题, ...])。
-    该窗口客户区==窗口矩形(标题栏是游戏自绘的),所以矩形就是"整个客户端画面";
-    结果按屏幕位置(先上后左)排序,多开时区域编号稳定。
+    量的是**客户区**(GetClientRect + ClientToScreen):游戏选 800×600,
+    量出来就是 800×600,与设置界面里的档位完全对齐;用 GetWindowRect 会
+    把系统标题栏/边框也算进去(新版客户端带系统框,量出 812×663 这种数),
+    档位就全歪了。结果按屏幕位置(先上后左)排序,多开时区域编号稳定。
     """
     import ctypes
     from ctypes import wintypes
@@ -493,10 +542,32 @@ def find_client_windows():
         if user32.IsIconic(hwnd):
             minimized.append(title or "梦幻西游")      # 最小化:截不到画面
             return True
+        global GAME_DPI
+        # 游戏是 DPI-unaware 的:GetDpiForWindow 对它恒报 96,不能用作换算比。
+        # 缩放比取"窗口所在显示器的有效 DPI"(GetDpiForMonitor 的 MDT_EFFECTIVE
+        # _DPI;感知进程里拿真实值,无感知进程会被虚拟化成 96 —— 探针验证时
+        # 必须先 dpi_aware)。四参数原型:dpiX/dpiY 两个出参,少一个就 E_INVALIDARG。
+        try:
+            mon = user32.MonitorFromWindow(hwnd, 2)   # MONITOR_DEFAULTTONEAREST
+            shcore = getattr(ctypes.windll, "shcore", None)
+            dx, dy = wintypes.UINT(), wintypes.UINT()
+            if mon and shcore is not None:
+                shcore.GetDpiForMonitor.argtypes = [
+                    ctypes.c_void_p, ctypes.c_int,
+                    ctypes.POINTER(wintypes.UINT), ctypes.POINTER(wintypes.UINT)]
+                shcore.GetDpiForMonitor.restype = ctypes.c_long
+                if shcore.GetDpiForMonitor(mon, 0, ctypes.byref(dx),
+                                           ctypes.byref(dy)) == 0:
+                    GAME_DPI = dx.value or 96
+        except Exception:
+            pass
         rect = wintypes.RECT()
-        if not user32.GetWindowRect(hwnd, ctypes.byref(rect)):
+        if not user32.GetClientRect(hwnd, ctypes.byref(rect)):
             return True
-        box = [rect.left, rect.top, rect.right, rect.bottom]
+        pt = wintypes.POINT(0, 0)
+        if not user32.ClientToScreen(hwnd, ctypes.byref(pt)):
+            return True
+        box = [pt.x, pt.y, pt.x + rect.right, pt.y + rect.bottom]
         if (box[2] - box[0] < CLIENT_MIN_W or box[3] - box[1] < CLIENT_MIN_H
                 or box[0] < -10000):                  # 最小化窗口的坐标是 -32000
             return True
@@ -858,32 +929,17 @@ class Engine(threading.Thread):
         self.ocr = Ocr(self.app.log)
         self.keju_tool = KejuTool(app, lambda: self.screen, lambda: self.ocr)
         self.keju_tool.start()
+        self.refresh_tools()    # 自动监听默认开(watching 随工具初始化),按它激活
 
     def request_cycle(self):
         """手动识别:投递给科举自己的线程(它下一次循环立刻执行)。"""
         self.keju_tool.request(force=True)
-
-    def request_fullscan(self):
-        """全屏扫描:同样投递给科举自己的线程。"""
-        self.keju_tool.request_fullscan()
 
     def set_watch(self, on: bool):
         # 直接改布尔标志(GIL 下原子);日志当场打,不再绕引擎线程
         self.keju_tool.watching = bool(on)
         self._log_watch_state()
         self.refresh_tools()            # 科举线程跟着这个开关启停
-
-    def toggle_watch(self):
-        self.set_watch(not self.keju_tool.watching)
-
-    def _safe(self, name, *args):
-        """按方法名执行识别任务:任何异常(含方法缺失)都记堆栈,不让线程死掉。"""
-        try:
-            getattr(self, name)(*args)
-        except Exception:
-            import traceback
-            self.app.log("[引擎]任务异常(已恢复):\n"
-                         + traceback.format_exc(), ui=False)
 
     @property
     def ocr_ok(self):
@@ -906,14 +962,13 @@ class Engine(threading.Thread):
         try:
             tool.stop()
         except Exception as e:
-            self.app.log(f"[引擎]停止工具线程失败: {e}", ui=False)
+            self.app.log(f"[引擎]停止工具线程失败: {e}")
         try:
             tool.join(timeout)          # 没 start 过的线程会抛,忽略即可
         except Exception:
             pass
         if tool.is_alive():
-            self.app.log(f"[引擎]{getattr(tool, 'name', '工具')}线程未能退出",
-                         ui=False)
+            self.app.log(f"[引擎]{getattr(tool, 'name', '工具')}线程未能退出")
 
     def run(self):
         # 引擎初始化整段兜异常:打包版无控制台,静默死掉会让看门狗每 10 秒
@@ -932,7 +987,7 @@ class Engine(threading.Thread):
         except BaseException as e:
             import traceback
             self.app.log(f"[OCR]引擎初始化失败: {e}")
-            self.app.log(traceback.format_exc(), ui=False)
+            self.app.log(traceback.format_exc())
             return
         self._wake_tools()              # 截图/OCR 都就绪了,可以开工了
         # 识别任务全在工具自己的线程里跑(手动任务也是一路投递过去的),
@@ -961,7 +1016,7 @@ class Engine(threading.Thread):
             (tool.activate if on else tool.deactivate)()
         except Exception as e:                  # 工具没有这套 API:至少把标志摆对
             tool.enabled = bool(on)
-            self.app.log(f"[引擎]切换工具开关失败({e})", ui=False)
+            self.app.log(f"[引擎]切换工具开关失败({e})")
 
     def _wake_tools(self):
         """工具线程空闲时完全不轮询,状态一变就得叫它一声。"""
@@ -969,16 +1024,12 @@ class Engine(threading.Thread):
         if tool is not None:
             tool._wake.set()
 
-    def cycle(self, force: bool):
-        """分派一轮识别(_safe 按名字调它的任务入口)。"""
-        self.keju_tool.keju_cycle(force)
-
 def prune_voice_cache(cfg, bank) -> int:
     """删除与当前合成参数不匹配的缓存音频(改语速/音色后留下的失效文件)。"""
     voice = app_cfg(cfg).get("voice_hint") or "zh-CN-YunxiNeural"
     rate, volume, pitch = edge_params(cfg)
     texts = {e["a"] for e in bank.entries}
-    texts |= {SAY_MULTI_QUESTION, SAY_TTS_TEST}
+    texts.add(SAY_TTS_TEST)
     valid = {os.path.basename(_voice_cache_path(t, voice, rate, volume, pitch))
              for t in texts}
     removed = 0
@@ -1028,10 +1079,11 @@ def build_voice_cache(limit: int = 0, workers: int = 4, log=print):
             items.append(a)
     if limit > 0:
         items = items[:limit]
-    todo = [a for a in items
-            if not (os.path.exists(_voice_cache_path(a, voice, rate, volume, pitch))
-                    and os.path.getsize(_voice_cache_path(a, voice, rate, volume,
-                                                          pitch)) > 0)]
+    todo = []
+    for a in items:
+        pth = _voice_cache_path(a, voice, rate, volume, pitch)
+        if not (os.path.exists(pth) and os.path.getsize(pth) > 0):
+            todo.append(a)
     skipped = len(items) - len(todo)
     log(f"待合成 {len(todo)} 条(共 {len(items)} 条,已有 {skipped} 条,"
         f"{workers} 路并行)")

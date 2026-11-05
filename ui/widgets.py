@@ -1,31 +1,10 @@
-"""窗口摆位 / 动效 / 全套主题 —— 各窗口共用这一份,不各写各的。"""
-FADE_MS, FADE_STEP_MS = 160, 25      # 淡入淡出时长 / 每帧间隔(Windows 的定时器
-#                                      粒度就是 ~16ms,帧太密反而拖长总时长)
+"""窗口摆位 / 动效 —— 主窗与迷你窗共用这一份,不各写各的。"""
+import tkinter as tk
+
+FADE_STEP_MS = 25                   # 淡入每帧间隔(Windows 的定时器粒度就是
+#                                     ~16ms,帧太密反而拖长总时长)
 POP_PX, POP_MS = 18, 200             # 弹出时从偏下这么多像素滑到位 / 时长
 TITLE_H = 28                         # 大致标题栏高度:居中时往上让一点
-
-
-def win_origin(win):
-    """窗口的"摆放坐标" (x, y) —— 和 `geometry("+x+y")` 同一套。
-
-    别拿 `winfo_rootx/rooty` 当摆放坐标:那是**客户区**的屏幕坐标,和 geometry
-    差一个标题栏+边框(这台机器 125% 缩放下差 9/38),拿它去摆窗每切一次就漂一点。
-    """
-    try:
-        return (int(win.winfo_x()), int(win.winfo_y()))
-    except Exception:
-        return None
-
-
-def window_box(win):
-    """窗口的屏幕矩形 (x, y, 宽, 高);还没映射时用请求尺寸兜底。"""
-    try:
-        w, h = win.winfo_width(), win.winfo_height()
-        if w <= 1 or h <= 1:
-            w, h = win.winfo_reqwidth(), win.winfo_reqheight()
-        return (win.winfo_rootx(), win.winfo_rooty(), w, h)
-    except Exception:
-        return None
 
 
 def centered_xy(size, screen, ref=None):
@@ -175,82 +154,110 @@ def pop_in(win, xy=None, offset=(0, POP_PX), ms=POP_MS, show=True):
     _animate(win, frames, done=done)
 
 
-def fade_out(win, then=None, ms=FADE_MS):
-    """淡出,完了执行 then(一般是 destroy / withdraw)。"""
-    try:
-        if not win.winfo_exists():
-            raise RuntimeError("窗口没了")
-        win.attributes("-alpha", 1.0)
-    except Exception:
-        if then:
-            then()
-        return
-    steps = max(1, ms // FADE_STEP_MS)
-    frames = []
-    for i in range(1, steps + 1):
-        k = i / float(steps)
+# ---- 圆角文字按钮 / 监听状态小圆点:ttk 做不了圆角与三态,Canvas 画 ----
 
-        def frame(k=k):
-            win.attributes("-alpha", max(0.0, 1.0 - k))
-        frames.append(frame)
-    _animate(win, frames, done=then)
+def round_pts(x1, y1, x2, y2, r):
+    """圆角矩形轮廓点列(create_polygon + smooth=True 一次画圆)。"""
+    r = min(r, (x2 - x1) / 2, (y2 - y1) / 2)
+    return (x1 + r, y1, x2 - r, y1, x2, y1, x2, y1 + r,
+            x2, y2 - r, x2, y2, x2 - r, y2, x1 + r, y2,
+            x1, y2, x1, y2 - r, x1, y1 + r, x1, y1)
 
 
-# ---- 统一外观:全套配色与 ttk 样式(扁平卡片风),所有窗口共用这一份 ----
-BG, CARD = "#f0f3f8", "#ffffff"
-ACCENT, TXT, SUB = "#2f6fb0", "#1f2a3a", "#7b8794"
-BORDER = "#e2e8f0"
+class TextButton(tk.Canvas):
+    """圆角文字按钮:悬停变浅、按下更深,松手还在按钮上才触发回调。
 
-
-def apply_theme():
-    """配好 ttk 主题与共用样式(扁平卡片风),返回调色板。
-
-    ttk.Style 是全局的,但样式得有人在窗口显示**之前**配过;每个窗口
-    各调一次(幂等)。
+    palette 由调用方按当前皮肤给(_btn_pal),本组件不自带配色。
     """
-    from tkinter import ttk
-    style = ttk.Style()
-    try:
-        style.theme_use("clam")
-    except Exception:
-        pass
-    font_base = ("Microsoft YaHei UI", 10)
-    style.configure(".", background=CARD, foreground=TXT, font=font_base)
-    style.configure("TFrame", background=CARD)
-    style.configure("TLabel", background=CARD, foreground=TXT)
-    style.configure("Hint.TLabel", background=CARD, foreground=SUB,
-                    font=("Microsoft YaHei UI", 9))
-    style.configure("Section.TLabel", background=CARD, foreground=ACCENT,
-                    font=("Microsoft YaHei UI", 10, "bold"))
-    style.configure("Big.TLabel", background=CARD, foreground=ACCENT,
-                    font=("Microsoft YaHei UI", 17, "bold"))
-    style.configure("Footnote.TLabel", background=CARD, foreground=SUB,
-                    font=("Microsoft YaHei UI", 8))
-    style.configure("OK.TLabel", background=CARD, foreground="#2f9e5f",
-                    font=("Microsoft YaHei UI", 9))
-    style.configure("TButton", background="#e9edf3", foreground=TXT,
-                    borderwidth=0, focusthickness=0, padding=(10, 5))
-    style.map("TButton", background=[("active", "#dbe3ee"),
-                                     ("pressed", "#ccd6e4")])
-    style.configure("Accent.TButton", background=ACCENT, foreground="#ffffff")
-    style.map("Accent.TButton", background=[("active", "#3c81c6"),
-                                            ("pressed", "#255d97")])
-    style.configure("Danger.TButton", background="#f6e8e8", foreground="#a03535")
-    style.map("Danger.TButton", background=[("active", "#efd9d9")])
-    style.configure("TCheckbutton", background=CARD, foreground=TXT,
-                    focusthickness=0)
-    style.map("TCheckbutton", background=[("active", CARD)])
-    style.configure("TSpinbox", fieldbackground="#ffffff", borderwidth=1,
-                    arrowsize=13)
-    style.configure("Slot.TLabel", background="#f7f9fc", foreground=SUB,
-                    font=("Microsoft YaHei UI", 9))
-    style.configure("SlotClose.TButton", background="#f7f9fc",
-                    foreground="#9aa4b2", borderwidth=0, padding=(2, 2))
-    style.map("SlotClose.TButton",
-              background=[("active", "#f0d9d9")],
-              foreground=[("active", "#c0392b")])
-    style.configure("Horizontal.TScale", background=CARD,
-                    troughcolor="#dfe5ee", borderwidth=0)
-    return {"bg": BG, "card": CARD, "accent": ACCENT, "txt": TXT, "sub": SUB,
-            "border": BORDER}
 
+    def __init__(self, parent, text, command, palette,
+                 width=88, height=32, radius=9, bg=None):
+        super().__init__(parent, width=width, height=height,
+                         highlightthickness=0,
+                         bg=bg if bg is not None else parent["bg"])
+        self._text, self._command = text, command
+        self._pal = palette
+        # 注意:_w/_h 是 tkinter 的控件路径属性,不能挪用,这里叫 _bw/_bh
+        self._bw, self._bh, self._br = width, height, radius
+        self.bind("<Enter>", lambda _e: self._paint("hover"))
+        self.bind("<Leave>", lambda _e: self._paint("normal"))
+        self.bind("<ButtonPress-1>", lambda _e: self._paint("press"))
+        self.bind("<ButtonRelease-1>", self._release)
+        self._paint("normal")
+
+    def _paint(self, state):
+        pal = self._pal
+        self.delete("all")
+        key = {"normal": "bg", "hover": "hover", "press": "press"}[state]
+        self.create_polygon(round_pts(1, 1, self._bw - 1, self._bh - 1,
+                                      self._br), smooth=True,
+                            fill=pal[key], outline="")
+        tid = self.create_text(self._bw / 2, self._bh / 2, text=self._text,
+                               font=pal["font"], fill=pal["fg"], anchor="c")
+        bb = self.bbox(tid)
+        if bb:
+            self.move(tid, 0, self._bh / 2 - (bb[1] + bb[3]) / 2)
+
+    def _release(self, e):
+        inside = 0 <= e.x <= self._bw and 0 <= e.y <= self._bh
+        self._paint("hover" if inside else "normal")
+        if inside:
+            self._command()
+
+    def set_text(self, text):
+        """换文案(模式/静音这类状态会变的钮用),重画回常态。"""
+        self._text = text
+        self._paint("normal")
+
+    def set_palette(self, pal):
+        """换配色(静音钮用红色系标记静音状态),重画回常态。"""
+        self._pal = pal
+        self._paint("normal")
+
+    def label(self):
+        """当前文案(测试与状态判断用)。"""
+        return self._text
+
+    def invoke(self):
+        self._command()
+
+
+class StatusDot(tk.Canvas):
+    """监听状态小圆点:监听中 = 绿点呼吸闪烁;未监听 = 红点常亮。"""
+
+    GREEN, GREEN_DIM, RED = "#22c55e", "#9fe8b8", "#e5484d"
+
+    def __init__(self, parent, d=10, bg=None):
+        super().__init__(parent, width=d, height=d, highlightthickness=0,
+                         bg=bg if bg is not None else parent["bg"])
+        self._d, self._aid, self._on = d, None, None
+        self.bind("<Destroy>", lambda _e: self._cancel())
+        self.set_state(False)
+
+    def _cancel(self):
+        if self._aid:
+            try:
+                self.after_cancel(self._aid)
+            except Exception:
+                pass
+            self._aid = None
+
+    def set_state(self, on: bool):
+        """on = 监听中(绿点闪烁);off = 红点常亮。状态没变就不动。"""
+        if on == self._on:
+            return
+        self._on = bool(on)
+        self._cancel()
+        if self._on:
+            self._blink(True)
+        else:
+            self._paint(self.RED)
+
+    def _blink(self, bright):
+        self._paint(self.GREEN if bright else self.GREEN_DIM)
+        self._aid = self.after(500, lambda: self._blink(not bright))
+
+    def _paint(self, color):
+        self.delete("all")
+        self.create_oval(1, 1, self._d - 1, self._d - 1, fill=color,
+                         outline="", tags="dot")
