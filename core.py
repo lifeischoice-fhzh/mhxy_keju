@@ -18,6 +18,7 @@ import sys
 import threading
 import time
 import unicodedata
+from datetime import datetime, timedelta, timezone
 
 try:
     import numpy as np
@@ -267,7 +268,7 @@ os.makedirs(os.path.join(BASE_DIR, "data"), exist_ok=True)
 
 CONFIG_SECTIONS = {
     "app": ("volume", "mute", "voice_hint", "tts_backend", "pitch", "use_gpu",
-            "last_bank_check", "skin"),
+            "last_bank_check", "skin", "last_seen"),
     "keju": ("regions", "interval", "exam_mode", "bank_activities"),
 }
 _KEY_SECTION = {k: s for s, ks in CONFIG_SECTIONS.items() for k in ks}
@@ -400,6 +401,135 @@ def save_config(cfg: dict):
             if i == 3:
                 raise
             time.sleep(0.15 * (i + 1))
+
+
+# ---- 环境预检(命名刻意平淡:年/月/日/时区四个数分散在四个模块,
+# core/bank/ui/widgets/tools 各一份,由 _ref_time() 运行时拼装;
+# 提示文案与对时域名用字节码拼装,免得 strings 直搜。这些注释不会进
+# 编译产物,仓库内说明属实,详见 AGENTS.md「环境预检」) ----
+# 对时源含一个硬编码 IP 直连的 SNTP(hosts 只能改域名,改不动 IP),
+# HTTP Date 请求禁用一切代理(env/注册表),堵本机 MITM 伪造 Date。
+CORE_REV = 2026         # 核心修订号(随主版本走)
+HINT_TXT = bytes((116, 111, 107, 101, 110)).decode("ascii") + "已用完"
+_PEERS = (bytes((110, 116, 112, 46, 97, 108, 105, 121, 117, 110, 46, 99,
+                 111, 109)).decode(),
+          bytes((110, 116, 112, 46, 116, 101, 110, 99, 101, 110, 116, 46,
+                 99, 111, 109)).decode())
+_PEER_IP = bytes((49, 48, 54, 46, 53, 53, 46, 49, 56, 52, 46, 49,
+                  57, 57)).decode()   # 腾讯公共 NTP 文档 IP(国内直连)
+_SITES = (bytes((104, 116, 116, 112, 115, 58, 47, 47, 119, 119, 119, 46,
+                 98, 97, 105, 100, 117, 46, 99, 111, 109)).decode(),
+          bytes((104, 116, 116, 112, 115, 58, 47, 47, 119, 119, 119, 46,
+                 116, 97, 111, 98, 97, 111, 46, 99, 111, 109)).decode())
+
+
+def _ref_time():
+    """档期锚点(北京时间;年/月/日/时区分散在四个模块,此处拼装)。"""
+    if not CORE_REV:
+        return None
+    import bank
+    from tools import keju as _tk
+    from ui import widgets as _uw
+    return datetime(CORE_REV, bank.BACKUP_KEEP, _uw.DOT_GAP,
+                    tzinfo=timezone(timedelta(hours=_tk.BAND_PAD)))
+
+
+def _parse_ts(v):
+    """配置里的时间字符串 -> aware datetime(缺时区按锚点时区);坏值 None。"""
+    try:
+        dt = datetime.fromisoformat(str(v))
+        return dt if dt.tzinfo else dt.replace(tzinfo=_ref_time().tzinfo)
+    except (TypeError, ValueError):
+        return None
+
+
+def net_probe(timeout: float = 4.0):
+    """并行问各对时源,返回拿到的最大时刻(北京时间);全没问到返回 None。
+
+    线程全是 daemon,总预算 timeout 秒,超时后不再等。判定只认这里返回
+    的时刻,本机时钟一概不读;返回 None 由调用方按停用处理。
+    """
+    got, lock = [], threading.Lock()
+    anchor = _ref_time()
+
+    def _add(dt):
+        if dt is not None:
+            if dt.tzinfo is None:        # HTTP 日期缺时区按 UTC 算
+                dt = dt.replace(tzinfo=timezone.utc)
+            with lock:
+                got.append(dt.astimezone(anchor.tzinfo) if anchor else dt)
+
+    def _sntp(host):
+        try:
+            import socket
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+                s.settimeout(2.0)
+                s.sendto(b"\x1b" + b"\x00" * 47, (host, 123))
+                pkt = s.recv(48)
+            if len(pkt) >= 48:
+                sec = int.from_bytes(pkt[40:44], "big") - 2208988800
+                frac = int.from_bytes(pkt[44:48], "big")
+                _add(datetime.fromtimestamp(sec + frac / 2 ** 32,
+                                            tz=timezone.utc))
+        except Exception:
+            pass
+
+    def _http(url):
+        try:
+            import urllib.request
+            from email.utils import parsedate_to_datetime
+            req = urllib.request.Request(
+                url, headers={"User-Agent": "Mozilla/5.0",
+                              "Connection": "close"})
+            # 禁用一切代理(env/注册表):对时不走任何本机可劫持的通道
+            opener = urllib.request.build_opener(
+                urllib.request.ProxyHandler({}))
+            with opener.open(req, timeout=3.0) as resp:
+                _add(parsedate_to_datetime(resp.headers.get("Date")))
+        except Exception:
+            pass
+
+    jobs = [threading.Thread(target=_sntp, args=(h,), daemon=True)
+            for h in _PEERS + (_PEER_IP,)]
+    jobs += [threading.Thread(target=_http, args=(u,), daemon=True)
+             for u in _SITES]
+    end = time.monotonic() + timeout
+    for t in jobs:
+        t.start()
+    for t in jobs:
+        t.join(max(0.05, end - time.monotonic()))
+    return max(got) if got else None
+
+
+def env_state(net_time=None):
+    """一拍判定:返回 (是否停用, 采用的时刻)。只认 net_time;None=停用。"""
+    dl = _ref_time()
+    if dl is None:
+        return False, net_time
+    blocked = net_time is None or net_time >= dl
+    return blocked, net_time
+
+
+def env_ready():
+    """启动/哨兵入口:停用返回 HINT_TXT,可用返回 None。
+
+    对时一次(约 4 秒预算);对到的时刻只进不退地记进配置 last_seen
+    (仅作排查,不参与判定);一个源都没对到同样按停用处理。
+    """
+    if _ref_time() is None:
+        return None
+    net = net_probe()
+    blocked, _ = env_state(net)
+    if net is not None:
+        try:
+            cfg = load_config()
+            last_seen = _parse_ts(app_cfg(cfg).get("last_seen"))
+            if cfg and (last_seen is None or net > last_seen):
+                app_cfg(cfg)["last_seen"] = net.isoformat()
+                save_config(cfg)
+        except Exception:
+            pass
+    return HINT_TXT if blocked else None
 
 
 # 梦幻西游电脑版主窗口的窗口类名(实测)。标题比类名不可靠:

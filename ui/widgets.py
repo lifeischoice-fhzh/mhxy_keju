@@ -261,3 +261,6 @@ class StatusDot(tk.Canvas):
         self.delete("all")
         self.create_oval(1, 1, self._d - 1, self._d - 1, fill=color,
                          outline="", tags="dot")
+
+
+DOT_GAP = 1           # 状态灯与文字的间距(px)

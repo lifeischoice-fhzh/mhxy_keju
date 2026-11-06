@@ -1,4 +1,4 @@
-# mhxy_keju —— 科举答题器(单功能独立应用)
+# mhxy_keju(单功能独立应用)
 
 从 `keju-answerer` 抽出的**科举单功能版**。降妖伏魔(铃铛/地图)不在本应用;
 工具箱那层窗口也没有 —— **启动直接进答题器主窗,只有一个窗口**。
@@ -25,7 +25,7 @@ python tests.py --only gui # 只跑某几组(名字带不带 sec_ 都行)
 ```
 
 **单实例**:GUI 已有实例在跑时再次启动,只弹「已经在运行」框并退场
-(命名互斥体 `Global\\MHXY_KEJU_ANSWERER_MUTEX`,`keju._single_instance`;
+(命名互斥体 `Global\\MHXY_KEJU_MUTEX`,`keju._single_instance`;
 命令行工具模式不拦,可与 GUI 并用)。测试进程内调 `keju.main` 的用例
 记得桩 `_single_instance`(tests 有先例)。
 
@@ -43,6 +43,8 @@ python tests.py --only gui # 只跑某几组(名字带不带 sec_ 都行)
 数据  bank.py         ~430 行  题库子系统(QuestionBank + 官方源更新)
 地基  core.py        ~1120 行  配置 / OCR / 截图 / 语音 / 窗口枚举 / Engine 调度
 测试  tests.py       ~3430 行  回归测试(patch/Sandbox 全离线;9 组 + 2 组分支补漏)
+打包  installer/     ~55 行   安装包脚本 installer.iss + 打包时生成的
+                              app.ico / ChineseSimplified.isl(均不入库)
 ```
 
 - `gui.App` 持有 `self.engine`(`core.Engine`),`Engine` 只挂 `keju_tool` 一条工具线程
@@ -55,7 +57,7 @@ python tests.py --only gui # 只跑某几组(名字带不带 sec_ 都行)
   `dist/` 是打包成品,不进自动清理。打包脚本(package.py)成功后也会
   自动清 `build/` 中间产物
 - **主窗是定稿模板**(2026-10-22):
-  664×232 不可缩放,窗口标题「风二与露娜」,图标 = 运行时绘制的金色状元帽
+  664×232 不可缩放,窗口标题「mhxy_keju」,图标 = 运行时绘制的金色状元帽
   (参考游戏道具的配色 + 经典官帽的帽翅造型,纯代码重绘 —— 刻意不抠图
   不留素材文件,避免版权风险;`ui_keju.set_icon` 1024 画布 + LANCZOS 抗锯齿,
   iconphoto 多尺寸阶梯 + WM_SETICON 挂大/小 HICON —— **须等 `<Map>` 再挂,
@@ -117,6 +119,30 @@ python tests.py --only gui # 只跑某几组(名字带不带 sec_ 都行)
   (`tools_keju.record_event`),`cli.cmd_stats` 首选读它,没有才回退解析 keju.log
   —— 日志文案怎么改都断不了统计;新增事件 kind 要同步 cmd_stats。
   启动时 `core.prune_events()` 清掉非当天的行:统计只看当天,文件不会无限涨
+- **环境预检(2026-12-01 起过期即停用,过了 11-30 即停;对外刻意伪装成平淡命名)**:
+  截止日的年/月/日/时区四个数**刻意分散在四个模块**且命名互不相关:
+  `CORE_REV=2026`(core 常量区)、`BACKUP_KEEP=12`(bank 尾部)、
+  `DOT_GAP=1`(ui/widgets 尾部)、`BAND_PAD=8`(tools/keju 尾部,
+  UTC+8),由 `core._ref_time()` 运行时拼装成「北京时间当天 0 点」的
+  锚点;改截止日就是改这四个数再打包。判定**只认联网对时**:
+  `core.net_probe()` 并行问 SNTP(阿里/腾讯域名 + 腾讯公共 NTP 硬编码
+  IP 直连 `106.55.184.199`,hosts 改不动 IP)+ HTTP Date 头(baidu/
+  taobao;域名用 bytes 拼装,免 strings 直搜;HTTP 请求禁用一切代理,
+  防本机 MITM 伪造 Date),取最大时刻统一换算北京时间;**所有源都没
+  对到同样按停用处理**(fail-closed)—— 本机时钟与任何离线退路一概
+  不读,「删配置+防火墙+拨时钟/拨时区」都不再是绕过口。停用文案
+  `HINT_TXT`(「token已用完」,前半用 bytes 拼装)由 `core.env_ready()`
+  返回:`keju.main` 在依赖/题库检查后放闸 —— GUI 不弹框不退场,照常
+  开窗(`App(readonly=True)`):不造引擎/语音,题目识别区常驻
+  `ui_keju.draw_readonly` 的提示,所有按钮点击一律静默丢弃(on_* 回调
+  统一 `_readonly` 早退);用量型命令行(--tts-test/--update-bank/
+  --uncollected/--build-voice-cache)print 一句返回 1;--selftest/
+  --stats/--rewards 放行(打包 QA 必跑 --selftest)。运行中由
+  `gui._drain_logs` 的预检哨兜住:约 30 秒一拍(PROBE_TICKS)起后台
+  探针对时(结果摆属性主线程消费,不阻塞界面),确认跨线一拍即停
+  (`App._go_readonly`);读不到连续 PROBE_MISS_MAX(3)拍也按停用
+  (约 90 秒容抖动)。测试:stub `core.net_probe` 保离线确定性;用例
+  在 sec_cli 尾部(入口放闸)与 sec_gui(只读态/跨线哨/miss 三拍)
 
 ## 从源项目(keju-answerer)带过来的约定
 
@@ -139,15 +165,31 @@ python tests.py --only gui # 只跑某几组(名字带不带 sec_ 都行)
 
 ```bash
 package.bat                              # 或 .venv/Scripts/python.exe package.py
-package.py --dry-run                     # 先看会保留哪些运行时文件
+package.py --dry-run                     # 先看会保留哪些运行时文件和要跑的命令
+package.py --installer-only              # 只重出安装包,不重打 exe
+package.py --no-installer                # 只出绿色目录版,不出安装包
 ```
 
-- spec 是 `科举答题器.spec`;datas 带题库 + 语音缓存(不放地图,本应用没有
+- spec 是 `mhxy_keju.spec`;datas 带题库 + 语音缓存(不放地图,本应用没有
   地图功能)。`voice_cache` 是运行时缓存(答过的题才有),**可整目录删除**,
   会随答题自动重建;缺失时 spec 自动跳过、不阻断打包
 - 打包前脚本会 taskkill 旧 exe,并把 dist 里的 config.json / 日志 / 收益记录
   备份出来,打完放回去
-- 打完必须真实跑过:至少 `dist\科举答题器\科举答题器.exe --selftest`(分配控制台
+- 默认打两样:**绿色目录版** dist\mhxy_keju + **安装包**
+  dist\mhxy_keju_v1.0.0.exe(Inno Setup 6 压制,脚本自动找
+  ISCC.exe,没装会在绿色版打好后报错并提示 winget 装法)。安装包每用户
+  装到 `%LOCALAPPDATA%\Programs\mhxy_keju`,**不能装 Program Files** ——
+  程序运行时把 config/data/语音缓存全写在 exe 同目录(core.BASE_DIR 跟着
+  exe 走),必须落在用户可写位置;卸载只删装进去的文件,配置/题库/收益
+  留在原地;升级覆盖安装不丢用户数据。安装包**剔除开发机的运行时产物**
+  (config.json / keju.log* / data 下 events/rewards/uncollected/backup,
+  iss 的 Excludes),新用户首启自建默认配置;绿色版 dist 不受影响,
+  开发机自己的这些文件照旧随打包保留
+- 图标:exe/安装包/快捷方式共用打包时现生成的 `installer/app.ico`
+  (调 ui_keju 的状元帽绘制落成 ico,不入库);中文向导语言包
+  `installer/ChineseSimplified.isl` 同样不入库,缺了 package.py 会按
+  raw.githubusercontent → api.github.com → jsdelivr 顺序拉
+- 打完必须真实跑过:至少 `dist\mhxy_keju\mhxy_keju.exe --selftest`(分配控制台
   跑真 OCR 自检)+ 启动 GUI 看一眼
 
 ## 工作方式约定(沿用源项目)

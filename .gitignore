@@ -18,5 +18,9 @@ __pycache__/
 build/
 dist/
 
+# 打包辅助(package.py 打包时自动生成/下载,不入库)
+installer/app.ico
+installer/ChineseSimplified.isl
+
 # 依赖
 .venv/

@@ -310,7 +310,7 @@ def cmd_tts_test() -> int:
         print("语音引擎启动失败")
         return 1
     print(f"语音: {sp.voice_name}(音调 {core.edge_params(cfg)[2]:+d}Hz)")
-    sp.say("梦幻西游科举答题器,语音测试成功。")
+    sp.say("梦幻西游 mhxy_keju,语音测试成功。")
     time.sleep(4)
     return 0
 

@@ -16,6 +16,9 @@ tmp_ret = collect_all('onnxruntime')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('edge_tts')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+# 图标由 package.py 打包前生成(installer/app.ico,运行时画的状元帽);
+# 单独手动跑 spec 没有它就退回默认图标,不阻断
+exe_icon = 'installer/app.ico' if os.path.isfile('installer/app.ico') else None
 
 
 a = Analysis(
@@ -38,12 +41,13 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='科举答题器',
+    name='mhxy_keju',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
     console=False,
+    icon=exe_icon,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
@@ -57,5 +61,5 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='科举答题器',
+    name='mhxy_keju',
 )

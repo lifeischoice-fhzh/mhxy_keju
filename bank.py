@@ -36,7 +36,7 @@ def _gh_raw(path: str, timeout: int = 30) -> bytes:
     req = urllib.request.Request(
         _GH_API + path,
         headers={"Accept": "application/vnd.github.raw",
-                 "User-Agent": "keju-answerer"})
+                 "User-Agent": "mhxy_keju"})
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         return resp.read()
 
@@ -405,7 +405,13 @@ class QuestionBank:
 
     @staticmethod
     def pick_with_options(candidates, options_text: str):
-        """候选中答案出现在选项文本里的优先。返回 (entry|None, score, note)。"""
+        """候选中答案出现在选项文本里的优先。返回 (entry|None, score, note)。
+
+        80 是"答案清清楚楚在选项里"的硬线;够不到时回退第一名 —— 但题干
+        得分打平的真歧义组(官方源同一题干带两个答案变体,如 花妖/蜃气妖)
+        回退只是掷硬币,所以退一档开 65 的近似线:OCR 把「蜃气妖」读成
+        「屋气妖」也有 67,认字总比掷硬币强。近似线只在第一名打平时生效。
+        """
         import core
         from rapidfuzz import fuzz
 
@@ -423,5 +429,12 @@ class QuestionBank:
         if best is not None and best_vs >= 80:
             e, s = best
             return e, s, " [按选项消歧]"
+        tied = len(candidates) > 1 and candidates[0][1] == candidates[1][1]
+        if best is not None and best_vs >= 65 and tied:
+            e, s = best
+            return e, s, " [按选项消歧·近似]"
         e, s = candidates[0]
         return e, s, ""
+
+
+BACKUP_KEEP = 12       # 题库备份保留份数(超过就轮转掉最旧的)

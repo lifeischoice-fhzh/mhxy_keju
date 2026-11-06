@@ -1,4 +1,4 @@
-"""界面层:单窗口应用 —— 启动即科举答题器,窗口生命周期与各按钮回调(布局在 ui/)。"""
+"""界面层:单窗口应用 —— 启动即 mhxy_keju,窗口生命周期与各按钮回调(布局在 ui/)。"""
 import os
 import time
 from tkinter import messagebox
@@ -64,7 +64,7 @@ def _set_appusermodelid():
         shell32 = ctypes.windll.shell32
         shell32.SetCurrentProcessExplicitAppUserModelID.argtypes = [
             ctypes.c_wchar_p]
-        shell32.SetCurrentProcessExplicitAppUserModelID("Mhxy.Keju.FengErYuLuNa")
+        shell32.SetCurrentProcessExplicitAppUserModelID("mhxy_keju")
     except Exception:
         pass
 
@@ -72,6 +72,8 @@ def _set_appusermodelid():
 # ---------------- GUI ----------------
 
 POLL_MS = 50      # 界面刷新间隔:答案上屏(50ms 人眼看不出延迟)
+PROBE_TICKS = 600          # 环境预检哨:每拍 POLL_MS,×600 ≈ 30 秒一次
+PROBE_MISS_MAX = 3         # 连续几拍预检不到才判停用(≈90 秒容抖动)
 
 class App:
     """组合 Tk 根窗口与各工作线程。"""
@@ -96,13 +98,14 @@ class App:
     def _set(self, key, val):
         self.cfg.setdefault(self._section(key), {})[key] = val
 
-    def __init__(self):
+    def __init__(self, readonly=False):
         import tkinter as tk
 
         _set_appusermodelid()
         self.root = tk.Tk()
         # 按钮回调里没接住的异常,默认只打到 stderr(用户根本看不到);记进日志
         self.root.report_callback_exception = self._on_tk_error
+        self._readonly = bool(readonly)   # 只读模式:窗口照常开,只是不能答题
         self.cfg = core.load_config()
         self.bank = bank.QuestionBank()
         self.last_answer = ""
@@ -127,14 +130,17 @@ class App:
             pass
         self.log(f"[应用]启动 · 题库 {len(self.bank)} 题")
         tools_keju.record_event("boot")     # --stats 的分模式段从这里切开
-        try:
-            n = core.prune_voice_cache(self.cfg, self.bank)
-            if n:
-                self.log(f"[语音]已清理 {n} 个与当前语音参数不符的旧缓存")
-        except Exception:
-            pass
+        if not self._readonly:
+            try:
+                n = core.prune_voice_cache(self.cfg, self.bank)
+                if n:
+                    self.log(f"[语音]已清理 {n} 个与当前语音参数不符的旧缓存")
+            except Exception:
+                pass
 
         ui_keju.build(self, self.skin)
+        if self._readonly:
+            ui_keju.draw_readonly(self.hero_canvas, self.skin)
         # 主窗只有一个:摆在 build 里定好的位置,浮入并提到前面
         xy = getattr(self.root, "p_xy", None)
         pop_in(self.root, xy=xy)
@@ -143,18 +149,30 @@ class App:
         except Exception:
             pass
 
-        self.speaker = core.Speaker(self.cfg, lambda m: self.log(m))
-        self.speaker.start()
-        self._engine_bad = 0           # 看门狗连续不健康次数(退避用,启动归零)
-        self.engine = core.Engine(self)
-        self.engine.start()
+        if self._readonly:
+            # 只读模式:不造引擎不造语音 —— 答题相关的路全不通,识别区常驻提示
+            self.speaker = None
+            self.engine = None
+        else:
+            self.speaker = core.Speaker(self.cfg, lambda m: self.log(m))
+            self.speaker.start()
+            self._engine_bad = 0       # 看门狗连续不健康次数(退避用,启动归零)
+            self.engine = core.Engine(self)
+            self.engine.start()
+            self._auto_bank_update()
 
-        self._auto_bank_update()
-        self.log("[应用]就绪 —— 已默认开启自动监听,定位到客户端即开始答题")
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         self.root.after(POLL_MS, self._drain_logs)
-        # 启动即自动定位:坐标不留在配置里,每次启动都按当前窗口重新找
-        self.on_autolocate()
+        if self._readonly:
+            try:
+                self.status_dot.set_state(False)    # 红点常亮
+            except Exception:
+                pass
+            self.log(f"[应用]{core.HINT_TXT} —— 应用已停用,不能识别与播报")
+        else:
+            self.log("[应用]就绪 —— 已默认开启自动监听,定位到客户端即开始答题")
+            # 启动即自动定位:坐标不留在配置里,每次启动都按当前窗口重新找
+            self.on_autolocate()
 
     # ---- 界面回调 ----
     def _refresh_mode_btn(self):
@@ -167,6 +185,8 @@ class App:
             pass
 
     def on_toggle_mode(self):
+        if getattr(self, "_readonly", False):
+            return
         self._set_exam_mode(not bool(self._get("exam_mode", True)))
 
     def _set_exam_mode(self, keju: bool):
@@ -191,6 +211,8 @@ class App:
         ui_keju.refresh_capsules(self, regions, names)
 
     def on_toggle_mute(self):
+        if getattr(self, "_readonly", False):
+            return
         self._set("mute", not bool(self._get("mute")))
         core.save_config(self.cfg)
         self._refresh_mute_btn()
@@ -205,6 +227,8 @@ class App:
         每次都会先把旧坐标全部清掉:客户端挪过位置后,旧坐标只会误导。
         最多定位 core.MAX_CLIENTS 个客户端,多出的舍弃。
         """
+        if getattr(self, "_readonly", False):
+            return    # 停用态:按钮点击一律静默丢弃(不处理、不记日志)
         self._clear_all_regions()          # 先无条件清空,再重新填
         try:
             wins, minimized = core.find_client_windows()
@@ -313,6 +337,8 @@ class App:
         画面/题目记忆也作废。跟随基准比窗口枚举少了的话就不再自动跟随
         (can_follow_clients 要求数量一致),重新点「客户端刷新」即可。
         """
+        if getattr(self, "_readonly", False):
+            return
         regions = ((self._get("regions") or [])
                    + [None] * core.MAX_CLIENTS)
         if not regions[i]:
@@ -327,11 +353,15 @@ class App:
 
     def on_manual_scan(self):
         """手动识别:立刻投递一次识别任务(不受自动监听开关限制)。"""
+        if getattr(self, "_readonly", False):
+            return
         self.engine.request_cycle()
         self.log("[手动识别]已手动触发一次识别")
 
     def on_toggle_skin(self):
         """换肤:玄夜(深)/ 玄白(浅)一键切换,选择落盘下次启动沿用。"""
+        if getattr(self, "_readonly", False):
+            return
         skin = "light" if self._get("skin", "dark") == "dark" else "dark"
         self._set("skin", skin)
         core.save_config(self.cfg)
@@ -393,10 +423,14 @@ class App:
                    daemon=True).start()
 
     def on_test_tts(self):
+        if getattr(self, "_readonly", False):
+            return
         self.speaker.say(core.SAY_TTS_TEST)
 
     def on_mini(self):
         """缩成小窗置顶,不遮挡游戏;大号字显示最近答案。"""
+        if getattr(self, "_readonly", False):
+            return
         if getattr(self, "mini", None) and self.mini.winfo_exists():
             self.mini.lift()
             return
@@ -451,6 +485,8 @@ class App:
             pass
 
     def on_restore(self):
+        if getattr(self, "_readonly", False):
+            return
         if getattr(self, "mini", None):
             try:
                 self.mini.destroy()
@@ -512,6 +548,37 @@ class App:
         # 这一趟的几步各自兜一层:这个方法是 `after` 自排自的整条界面刷新链的
         # 入口,只要有一次异常漏出去,链就断了 —— 窗口还在、引擎还在扫,
         # 但答案再也不上屏,看起来就是"卡死不动"。
+        # 环境预检哨:只认联网对时,本机时间一概不看。30 秒一拍起一个
+        # 后台探针(结果摆属性、主线程消费,绝不阻塞界面):确认跨过锚点
+        # 一拍就停;预检不到连续 PROBE_MISS_MAX 拍也按停用处理(约 90 秒,
+        # 免得一次网络抖动打死正在用的会话;要更严改小常数即可)
+        try:
+            self._probe_ticks = getattr(self, "_probe_ticks", 0) + 1
+            if self._probe_ticks >= PROBE_TICKS:
+                self._probe_ticks = 0
+                if not getattr(self, "_probing", False):
+                    self._probing = True
+                    import threading as _th
+
+                    def _probe():
+                        self._probe_net = core.net_probe()
+                        self._probing = False
+
+                    _th.Thread(target=_probe, daemon=True,
+                               name="环境预检").start()
+            net = getattr(self, "_probe_net", "?")
+            if net != "?":                 # 有一拍结果:主线程消费
+                self._probe_net = "?"
+                if self._probe_tick(net):
+                    self._go_readonly()
+                    self.root.after(POLL_MS, self._drain_logs)
+                    return
+        except Exception as e:
+            self._note_broken("环境预检", e)
+        if getattr(self, "_readonly", False):
+            # 停用态:窗口留着只显示提示,引擎相关的整条刷新链都跳过
+            self.root.after(POLL_MS, self._drain_logs)
+            return
         # 状态灯:监听中 = 绿点闪烁;未监听/未定位 = 红点常亮
         try:
             watching = bool(getattr(self.engine.keju_tool, "watching", False))
@@ -589,6 +656,45 @@ class App:
             self._note_broken("引擎看门狗", e)
         self.root.after(POLL_MS, self._drain_logs)
 
+    def _probe_tick(self, net):
+        """消费一拍预检结果:返回 True=该停用。None 记一次 miss,连拍满
+        PROBE_MISS_MAX 按停用处理;有时刻则确认跨线即停、没跨清零重计。"""
+        if net is None:
+            self._probe_miss = getattr(self, "_probe_miss", 0) + 1
+        else:
+            self._probe_miss = 0
+            if core.env_state(net)[0]:
+                return True
+        return self._probe_miss >= PROBE_MISS_MAX
+
+    def _go_readonly(self):
+        """预检不过(启动传入或运行中跨线):停识别播报,识别区常驻提示。
+
+        窗口不关:用户还能看到发生了什么,换肤这类纯界面操作照常,答题
+        相关的路(引擎/监听/手动识别/试听/定位)全部不通。
+        """
+        if getattr(self, "_readonly", False):
+            return
+        self._readonly = True
+        try:
+            self._clear_all_regions()      # 引擎还在时先清坐标(它要动工具)
+        except Exception:
+            pass
+        eng = getattr(self, "engine", None)
+        if eng is not None:
+            self._retire_engine(eng)       # 停识别 + 后台回收,不等线程
+            self.engine = None
+        try:
+            core.save_config(self.cfg)
+        except Exception:
+            pass
+        self.log(f"[应用]{core.HINT_TXT},已停止识别与播报")
+        try:
+            ui_keju.draw_readonly(self.hero_canvas, self.skin)
+            self.status_dot.set_state(False)
+        except Exception as e:
+            self._note_broken("环境预检", e)
+
     def on_close(self):
         # 关闭即清空坐标:下次启动会重新自动定位,旧坐标不留在配置里误导
         try:
@@ -599,7 +705,8 @@ class App:
         _cleanup_litter()         # 顺手清掉可再生杂物(见函数说明)
         if getattr(self, "mini", None):
             stop_anim(self.mini)          # 没跑完的动效先停,别跟销毁撞上
-        self.speaker.quit()
+        if getattr(self, "speaker", None):
+            self.speaker.quit()
         self.root.destroy()
 
     def run(self):

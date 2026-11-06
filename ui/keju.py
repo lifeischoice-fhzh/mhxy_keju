@@ -1,4 +1,4 @@
-"""科举答题器主窗口(定稿模板 + 双皮肤)+ 迷你答案窗(归科举)。
+"""mhxy_keju 主窗口(定稿模板 + 双皮肤)+ 迷你答案窗(归科举)。
 
 只负责建界面;按钮动作仍然回到 App 上的同名方法。
 """
@@ -239,7 +239,7 @@ def build(app, skin="dark"):
 
     th = SKINS[skin]
     app.skin = skin
-    app.root.title("风二与露娜")
+    app.root.title("mhxy_keju")
     set_icon(app.root)
     app.root.resizable(False, False)
     app.root.geometry(f"{WIN_W}x{WIN_H}")   # place 布局不产生请求尺寸,窗要显式定
@@ -346,6 +346,21 @@ def draw_hero(cv, question, answer, skin="dark"):
                    anchor="w", tags="a")
 
 
+def draw_readonly(cv, skin="dark"):
+    # 识别区常驻「token已用完」(文案在 core.HINT_TXT);窗口照常在,只是不能再答题
+    """只读模式:识别区常驻停用提示,窗口照常开、只是不能再答题。"""
+    th = SKINS[skin]
+    cv.delete("all")
+    w, h = int(cv["width"]), int(cv["height"])
+    cv.create_polygon(round_pts(1, 1, w - 1, h - 1, th["card_r"]), smooth=True,
+                      fill=th["card"], outline=th["line"], width=1)
+    cx = w / 2
+    cv.create_text(cx, h / 2 - 40, text="已超过使用期限",
+                   font=(YH, 11, "bold"), fill=th["sub"])
+    cv.create_text(cx, h / 2 + 10, text="token已用完",
+                   font=A_FONT, fill=th["answer"])
+
+
 def apply_skin(app, skin):
     """换肤:清掉主窗全部子件按新皮肤重建;迷你窗若开着也重开成新配色。
 
@@ -357,6 +372,8 @@ def apply_skin(app, skin):
         w.destroy()
     build(app, skin)
     app._hero_shown = None          # 让刷新链立刻按新皮肤重画题目区
+    if getattr(app, "_readonly", False):
+        draw_readonly(app.hero_canvas, skin)   # 只读模式:重建后提示照样常驻
     if getattr(app, "mini", None) is not None:
         app._mini_anchor = None
         app.mini = None

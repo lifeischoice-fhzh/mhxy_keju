@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""梦幻西游 · 科举答题器(入口)
+"""梦幻西游 · mhxy_keju(入口)
 
 逻辑拆分:
 - core.py 配置 / OCR / 语音 / 识别引擎调度
@@ -43,12 +43,12 @@ def _single_instance() -> bool:
     """
     import ctypes
     k32 = ctypes.WinDLL("kernel32", use_last_error=True)
-    k32.CreateMutexW(None, False, "Global\\MHXY_KEJU_ANSWERER_MUTEX")
+    k32.CreateMutexW(None, False, "Global\\MHXY_KEJU_MUTEX")
     return ctypes.get_last_error() != 183    # 183 = ERROR_ALREADY_EXISTS
 
 
 def main():
-    ap = argparse.ArgumentParser(description="梦幻西游科举答题器")
+    ap = argparse.ArgumentParser(description="梦幻西游 mhxy_keju")
     ap.add_argument("--selftest", action="store_true", help="OCR+匹配自检(合成图片)")
     ap.add_argument("--seed", type=int, default=cli.SELFTEST_SEED, metavar="N",
                     help=f"自检抽题种子(默认 {cli.SELFTEST_SEED},可复现;0=每次随机)")
@@ -75,7 +75,7 @@ def main():
         import ctypes
         if not _single_instance():
             ctypes.windll.user32.MessageBoxW(
-                0, "科举答题器已经在运行,不能重复打开。", "科举答题器", 0x40)
+                0, "mhxy_keju 已经在运行,不能重复打开。", "mhxy_keju", 0x40)
             return 0
     core.ensure_data_files()
 
@@ -88,6 +88,19 @@ def main():
     if not os.path.exists(bank.BANK_PATH):
         print(f"题库文件不存在: {bank.BANK_PATH}")
         return 1
+
+    # 环境预检不过即停(见 core 环境预检):预检不过的版本不再提供答题能力。
+    # GUI 照常开窗,题目识别区常驻「token已用完」;--selftest/--stats/
+    # --rewards 只是自检与翻旧记录,不具答题能力,放行(--selftest 是打包
+    # QA 的必跑项);其余命令行模式拦下直接退场。
+    readonly = False
+    if not (args.selftest or args.stats or args.rewards):
+        blocked = core.env_ready()
+        if blocked:
+            if cli_mode:
+                print(blocked)
+                return 1
+            readonly = True
 
     if args.selftest:
         return cli.cmd_selftest(args.seed)
@@ -111,7 +124,7 @@ def main():
         return cli.cmd_build_voice_cache(args.build_voice_cache)
 
     core.dpi_aware()
-    App().run()
+    App(readonly=readonly).run()
     return 0
 
 

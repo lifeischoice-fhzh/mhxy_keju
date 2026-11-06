@@ -1,4 +1,4 @@
-# 科举答题器(梦幻西游)
+# mhxy_keju(梦幻西游)
 
 截取游戏界面的题目 → OCR 识别 → 题库匹配 → 语音播报答案。
 
@@ -15,7 +15,7 @@
 .venv\Scripts\python keju.py
 ```
 
-打包版:`dist\科举答题器\科举答题器.exe`,双击即用(首次运行会把内置题库与
+打包版:`dist\mhxy_keju\mhxy_keju.exe`,双击即用(首次运行会把内置题库与
 语音缓存复制到程序目录)。
 
 ## 使用
@@ -67,9 +67,24 @@ python tests.py                        # 回归测试(全量;--fast 快速模式
 
 ## 打包
 
-双击 `package.bat`(或 `.venv\Scripts\python.exe package.py`)。
+双击 `package.bat`(或 `.venv\Scripts\python.exe package.py`),产出两个东西:
+
+- `dist\mhxy_keju\` —— 绿色目录版,双击 exe 即用(首次运行会把内置题库与
+  语音缓存复制到程序目录)
+- `dist\mhxy_keju_v1.0.0.exe` —— 安装包,双击装到
+  `%LOCALAPPDATA%\Programs\mhxy_keju`(每用户安装,不需要管理员),
+  出桌面/开始菜单快捷方式,完成页可直接启动应用;控制面板「应用与功能」
+  可卸载,卸载保留配置/题库/收益记录。安装包不带开发机的运行时产物
+  (配置/日志/收益/事件),新用户首次启动自动生成默认配置
+
 打包前会关掉正在运行的旧 exe,并把 `dist` 里的 `config.json`、日志、收益
 记录备份出来,打完再放回去;`--dry-run` 只看会保留哪些文件。
+只重出安装包不重打 exe 用 `--installer-only`,只出绿色版用 `--no-installer`。
+
+安装包用 Inno Setup 6 压制(没有就 `winget install --id JRSoftware.InnoSetup -e`,
+没装时脚本会在绿色版打好后报错提示;单独手动跑 spec 无图标属正常,图标由
+package.py 用窗口同款状元帽绘制代码现生成到 `installer/app.ico`,连同中文
+向导语言包 `installer/ChineseSimplified.isl` 都不入库、打包时自动备齐)。
 
 ## 代码结构
 

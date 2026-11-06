@@ -321,6 +321,18 @@ def sec_bank():
     picked2, _, note2 = QuestionBank.pick_with_options(two, "A 完全不相干")
     check("pick_with_options:选项都不沾边则回落最高分",
           picked2["a"] == "甲" and not note2)
+    amb_pair = [({"q": "题", "a": "花妖", "n": "题"}, 100.0),
+                ({"q": "题", "a": "蜃气妖", "n": "题"}, 100.0)]
+    picked3, _, note3 = QuestionBank.pick_with_options(
+        amb_pair, "A.屋气妖B.鹿")
+    check("pick_with_options:平手组选项 OCR 读别字(蜃→屋)按近似线消歧",
+          picked3["a"] == "蜃气妖" and "近似" in note3, note3.strip())
+    lone_top = [({"q": "题", "a": "花妖", "n": "题"}, 100.0),
+                ({"q": "题", "a": "屋气妖", "n": "题"}, 67.0)]
+    picked4, _, note4 = QuestionBank.pick_with_options(
+        lone_top, "A.蜃气妖B.鹿")
+    check("pick_with_options:非平手不启用近似线,仍回退最高分",
+          picked4["a"] == "花妖" and not note4, note4.strip())
 
     sha1 = bank_mod._bank_content_sha([{"question": "a", "answer": "1"},
                                    {"question": "b", "answer": "2"}])
@@ -1545,7 +1557,7 @@ def sec_gui():
               and app.mute_btn.label() == "语音静音"
               and app.refresh_btn.label() == "客户端刷新"
               and app.skin_btn.label() == "换肤"
-              and app.root.title() == "风二与露娜"
+              and app.root.title() == "mhxy_keju"
               and app.hero_canvas.find_withtag("ph")     # 没信息时显示占位
               and app.status_dot.itemcget("dot", "fill")
               == ui_widgets.StatusDot.RED
@@ -2108,6 +2120,35 @@ def sec_gui():
         check("界面:迷你窗/统计/按钮/日志写入异常都不会影响主循环", True)
         app.on_restore()
 
+        # ---- 预检哨:只认联网对时 —— 确认跨线一拍即停 ----
+        # (探针在后台线程对时:stub net_probe,离线且确定性)
+        from datetime import timedelta as _td
+
+        def hero_texts(a):
+            cv = a.hero_canvas
+            return [cv.itemcget(i, "text") for i in cv.find_withtag("all")
+                    if cv.type(i) == "text"]
+
+        check("预检哨:读不到联网时间连续 3 拍也按停用处理",
+              app._probe_tick(None) is False
+              and app._probe_tick(None) is False
+              and app._probe_tick(None) is True)
+
+        past_net = core._ref_time() + _td(days=1)
+        app._probe_ticks = gui.PROBE_TICKS - 1
+        with patch(net_probe=lambda *a, **k: past_net):
+            app._drain_logs()             # 起对时探针(后台线程)
+            for _ in range(300):
+                if not getattr(app, "_probing", False):
+                    break
+                time.sleep(0.01)
+            app._drain_logs()             # 消费结果:确认跨线 -> 就地停用
+        check("预检哨:确认跨过锚点 -> 引擎停、识别区显示停用提示",
+              app.engine is None
+              and any("token已用完" in t for t in hero_texts(app))
+              and any("已停止识别与播报" in m for m in ui_logs()),
+              hero_texts(app))
+
         # ---- 收尾:覆盖 App.run() 与 on_close ----
         app.speaker = real_sp
         app.engine = FakeEngineOK(app)
@@ -2131,6 +2172,55 @@ def sec_gui():
             real_engine.shutdown(timeout=3.0)   # 别把真引擎的线程留给后面的组
         except Exception:
             pass
+
+        # ---- 预检不过启动:不开引擎,识别区常驻「token已用完」----
+        # (放收尾之后:一个进程同时只活一个 Tk 根,set_icon 的 PhotoImage
+        # 会绑到默认根上,前一个根还活着时第二个窗必炸)
+        exp = gui.App(readonly=True)
+        exp.root.withdraw()
+        exp_logs = []
+        exp_real_log = exp.log
+        exp.log = lambda msg, detail="": (exp_logs.append(msg),
+                                          exp_real_log(msg, detail))
+        check("预检不过:过期启动不开引擎/语音,识别区常驻「token已用完」",
+              exp.engine is None and exp.speaker is None
+              and any("token已用完" in t for t in hero_texts(exp)),
+              hero_texts(exp))
+        exp.on_manual_scan()
+        exp.on_autolocate()
+        exp.on_toggle_mode()
+        exp.on_toggle_mute()
+        exp.on_toggle_skin()
+        exp.on_mini()
+        exp.on_remove_client(0)
+        exp.on_restore()
+        check("预检不过:所有按钮点击一律静默丢弃(不处理不记日志)",
+              exp.engine is None and exp.speaker is None
+              and exp_logs == []
+              and bool(exp._get("exam_mode", True)) is True
+              and bool(exp._get("mute", False)) is False
+              and exp.skin == "dark"
+              and getattr(exp, "mini", None) is None
+              and not any(exp._get("regions") or []),
+              exp_logs)
+        exp._probe_ticks = gui.PROBE_TICKS - 1
+        with patch(net_probe=lambda *a, **k: None):
+            exp._drain_logs()             # 哨兵起探针(离线桩:读不到)
+            for _ in range(300):
+                if not getattr(exp, "_probing", False):
+                    break
+                time.sleep(0.01)
+            exp._drain_logs()             # 消费结果:停用态保持,不报错
+        check("预检不过:刷新链在停用态不碰引擎,状态保持",
+              exp._readonly is True and exp.engine is None)
+        exp.on_close()
+        exp_gone = False
+        try:
+            exp.root.winfo_exists()
+        except Exception:
+            exp_gone = True
+        check("预检不过:停用窗也能正常关闭(无语音线程也兜得住)", exp_gone)
+        _tcl_drain()      # exp 这台 Tk 解释器同样在主线程回收掉
 
 
 # --------------------------------------------------- 9 日志与统计 / 命令行
@@ -2288,7 +2378,8 @@ def sec_cli():
                    cmd_rewards=lambda: 0, cmd_uncollected=lambda add=(): 0,
                    update_bank=lambda: (True, "题库已更新: 1 → 2 题"),
                    build_voice_cache=lambda *a, **k: (1, 0, 0),
-                   check_deps=lambda: [], ensure_data_files=lambda: None):
+                   check_deps=lambda: [], ensure_data_files=lambda: None,
+                   env_ready=lambda: None):
             for flag in ("--selftest", "--tts-test", "--stats", "--update-bank",
                          "--rewards", "--uncollected"):
                 sys.argv = ["keju.py", flag]
@@ -2359,6 +2450,80 @@ def sec_cli():
                  text=True, cwd=here, timeout=60)
     check("入口:缺 numpy 时 import keju 不炸(能走到友好的缺依赖提示)",
           r3.stdout.strip() == "OK", (r3.stdout + r3.stderr).strip()[:80])
+
+    # ---- 环境预检闸门:过了 core 锚点停用,只认联网对时 ----
+    from datetime import timedelta as _td
+
+    deadline = core._ref_time()
+    check("预检:锚点日期钉死(年月日分散埋放,防改错分量)",
+          deadline == core.datetime(2026, 12, 1, tzinfo=core.timezone(
+              core.timedelta(hours=8))), str(deadline))
+    check("预检:对时源清单钉死(防字节拼装笔误)",
+          core._PEERS == ("ntp.aliyun.com", "ntp.tencent.com")
+          and core._PEER_IP == "106.55.184.199"
+          and core._SITES == ("https://www.baidu.com",
+                              "https://www.taobao.com"))
+    before, past = deadline - _td(days=1), deadline + _td(days=1)
+    cases = [
+        (past, True, "联网对到已过期停"),
+        (before, False, "联网没到截止放行"),
+        (None, True, "读不到联网时间按过期处理(fail-closed)"),
+    ]
+    for net, blocked, name in cases:
+        hit, now = core.env_state(net)
+        check(f"env_state:{name}", hit is blocked, f"hit={hit} now={now}")
+    from datetime import timezone as _tz
+    check("预检:截止固定按北京时间(UTC+8),与时区设置无关",
+          core._ref_time().utcoffset() == _td(hours=8))
+    shifted = past.astimezone(_tz(_td(hours=-11)))
+    check("预检:对时结果带任意时区也按时刻比较(拨时区无效)",
+          core.env_state(shifted)[0] is True
+          and core.env_state(shifted)[1] == past)
+
+    with Sandbox(), patch(net_probe=lambda *a, **k: None):
+        check("env_ready:对不到联网时间 -> 按停用处理返回停用文案",
+              core.env_ready() == "token已用完")
+    fake_net = deadline - _td(hours=2)
+    with Sandbox(), patch(net_probe=lambda *a, **k: fake_net):
+        check("env_ready:联网没到截止 -> 放行并记住对时结果",
+              core.env_ready() is None
+              and core._parse_ts(core.load_config()["app"]["last_seen"])
+              == fake_net)
+
+    with Sandbox() as sb_tk, patch(net_probe=lambda *a, **k: None), \
+            patch(check_deps=lambda: [], ensure_data_files=lambda: None), \
+            patch(cmd_selftest=lambda seed=None: 0, cmd_tts_test=lambda: 0,
+                  cmd_stats=lambda since="": 0), \
+            patch(mods=(keju,), _single_instance=lambda: True):
+        make_bank(sb_tk.bank, [{"q": "一加一等于几", "a": "二"}])
+        argv_backup = sys.argv
+        try:
+            sys.argv = ["keju.py", "--tts-test"]
+            rc, out = capture(keju.main)
+            check("预检:预检不过 --tts-test 被拦(用量型命令全停)",
+                  rc == 1 and "token已用完" in out, out.strip())
+            fakes = []
+
+            class _NoApp:
+                def __init__(self, readonly=False):
+                    fakes.append(readonly)
+
+                def run(self):
+                    pass
+
+            sys.argv = ["keju.py"]
+            with patch(mods=(keju,), App=_NoApp):
+                rc = keju.main()
+            check("预检:预检不过 GUI 照常开窗,以停用态启动(不弹框不退场)",
+                  rc == 0 and fakes == [True], f"rc={rc} fakes={fakes}")
+            sys.argv = ["keju.py", "--stats"]
+            check("预检:预检不过 --stats 照常放行(诊断不拦)",
+                  keju.main() == 0)
+            sys.argv = ["keju.py", "--selftest"]
+            check("预检:预检不过 --selftest 照常放行(打包 QA 要用)",
+                  keju.main() == 0)
+        finally:
+            sys.argv = argv_backup
 
 
 def official_get(keju_n=600, extra="", bounds=True):

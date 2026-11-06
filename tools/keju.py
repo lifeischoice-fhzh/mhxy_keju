@@ -1091,3 +1091,6 @@ class KejuTool(threading.Thread):
         self._region_t_detect[key] = started
         return True
 
+
+BAND_PAD = 8          # 对话框带四周的留白(px)
+
