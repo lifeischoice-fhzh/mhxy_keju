@@ -7,7 +7,7 @@
     .venv/Scripts/python.exe package.py --installer-only   # 只重出安装包
 
 两步打包:
-    1) PyInstaller 出绿色目录版 dist/mhxy_keju(配置、日志、收益和补题记录
+    1) PyInstaller 出绿色目录版 dist/mhxy_keju(配置、日志、选项仓库和补题记录
        先抄到临时目录,打完再放回去);
     2) Inno Setup(installer/installer.iss)把目录版压成安装包
        dist/mhxy_keju_v*.exe —— 双击装到 %LOCALAPPDATA%/Programs,
@@ -56,10 +56,11 @@ ISL_URLS = (
 # 运行时产物(每台机器/每次使用都不一样,打包不能丢)
 KEEP_FILES = (
     "config.json",
-    "data/rewards.json",
     "data/uncollected.jsonl",
     "data/events.jsonl",
     "data/keju_questions.backup.json",
+    "data/keju_options.json",   # 运行时答题攒的选项(curated 初版随包进来,
+                                # 之后每次重打包都把 dist 攒的那份保住)
 )
 KEEP_GLOBS = ("keju.log*",)
 

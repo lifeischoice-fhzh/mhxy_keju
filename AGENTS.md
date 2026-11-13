@@ -16,7 +16,7 @@ E:/Project/mhxy_keju/.venv/Scripts/python.exe
 keju.log          # 格式 [HH:MM:SS][模块]内容,按天轮转 .old
 
 # 命令行
-python keju.py --selftest / --rewards / --stats / --uncollected / --update-bank
+python keju.py --selftest / --stats / --uncollected / --update-bank
 
 # 回归测试(自 keju-answerer 移植;降妖伏魔两组已随功能裁掉)
 python tests.py            # 全量(含界面/引擎慢用例,约 1~2 分钟)
@@ -34,18 +34,37 @@ python tests.py --only gui # 只跑某几组(名字带不带 sec_ 都行)
 ## 目录结构与职责
 
 ```
-入口  keju.py        ~120 行  argparse + 命令行分支
-命令行 cli.py        ~670 行  cmd_*(自检/统计/补题/收益/音频预合成;自检夹具也在这)
-界面  gui.py          ~680 行  App:单窗口生命周期 + 按钮回调 + 引擎看门狗
-布局  ui/keju.py      ~480 行  主窗(place 定尺寸)/迷你窗纯布局 + 角色名框绘制
-部件  ui/widgets.py   ~260 行  摆位/动效 + 圆角钮/状态灯(Canvas 组件)
-逻辑  tools/keju.py  ~1090 行  KejuTool:自己的线程/状态/循环(识别、收益统计、事件落盘)
-数据  bank.py         ~430 行  题库子系统(QuestionBank + 官方源更新)
-地基  core.py        ~1120 行  配置 / OCR / 截图 / 语音 / 窗口枚举 / Engine 调度
-测试  tests.py       ~3430 行  回归测试(patch/Sandbox 全离线;9 组 + 2 组分支补漏)
+入口  keju.py        ~130 行  argparse + 命令行分支
+命令行 cli.py        ~640 行  cmd_*(自检/统计/补题/音频预合成;自检夹具也在这)
+界面  gui.py         ~930 行  App:单窗口生命周期 + 按钮回调 + 引擎看门狗
+布局  ui/keju.py     ~540 行  主窗(place 定尺寸)/迷你窗纯布局 + 角色名框绘制
+部件  ui/widgets.py  ~270 行  摆位/动效 + 圆角钮/状态灯(Canvas 组件)
+逻辑  tools/keju.py ~1310 行  KejuTool:自己的线程/状态/循环(识别、选项采集、事件落盘)
+数据  bank.py        ~440 行  题库子系统(QuestionBank + 官方源更新)
+地基  core.py        ~570 行  配置 / Engine 调度 / 事件(基础设施经它 re-export)
+截屏  ocr.py         ~210 行  Screen 截屏 + Ocr 识别(单文件可复用,顶层不 import core)
+窗口  client_common.py ~410 行  客户端窗口/画布枚举 + 分辨率折算 + 档位表 +
+                              角色名抠取 + 对话框/任务栏比例表(DLG_RATIOS /
+                              TRK_BOXES)与通用几何 box_of / ratio_of /
+                              draw_box(单文件可拷给别的应用,同上)
+窗口  clients.py       ~50 行  本应用窗口口径:支持档判定/文案 + 跟随闸
+语音  voice.py       ~450 行  Speaker 播报 + 合成/缓存维护(同上)
+测试  tests.py       ~4140 行  回归测试(patch/Sandbox 全离线;10 组 + 2 组分支补漏)
 打包  installer/     ~55 行   安装包脚本 installer.iss + 打包时生成的
                               app.ico / ChineseSimplified.isl(均不入库)
 ```
+
+- **识别基础设施拆成单文件模块**(ocr.py / clients.py / voice.py;窗口的
+  通用探测又拆 client_common.py —— 窗口/画布枚举、分辨率折算、档位表、
+  角色名抠取,可整文件拷给别的应用;clients.py 只留本应用口径:支持档
+  判定 client_supported / 支持档文案 / 跟随闸 can_follow_clients,并
+  re-export client_common 全部公开名):顶层**不 import core**(配置/路径
+  在函数内惰性取 `core.app_cfg` / `core.VOICE_CACHE_DIR` 等),单文件拷走、
+  喂配置即可给别的应用复用;core.py 在 `LOG_PATH` 后 re-export 全部公开名
+  (clients 那路经它转出),`core.XXX` 的既有引用与测试补丁语义不变。
+  tests.py 的 `PATCH_MODULES` 已含这四个模块 —— 模块内互调走自己那份名字
+  (如 Speaker 播 `_synth_edge_file`、画布探测内调 `Screen`、client_canvas
+  内调 `find_client_canvases`),只换 core 上的 re-export 拦不到真身
 
 - `gui.App` 持有 `self.engine`(`core.Engine`),`Engine` 只挂 `keju_tool` 一条工具线程
 - 启动即 `App.__init__`:建窗 → 弹出 → 起 Speaker/Engine → **无条件自动定位客户端**
@@ -66,16 +85,24 @@ python tests.py --only gui # 只跑某几组(名字带不带 sec_ 都行)
   无素材文件),place 定位布局 —— **place 不产生
   请求尺寸,根窗口必须 `geometry()` 显式定尺寸**,子 Frame 也要 place 显式
   给宽高(否则按子元素请求高裁切,按钮会被裁没)。布局:
-  - 左栏(白/深面板 170px):角色名框竖排(146×30 等宽,× 删单个,悬停
-    × 变红),末尾「客户端刷新」按钮(同宽对齐)替代原定位圆钮;
+  - 左栏(白/深面板 170px):角色名框竖排(146×30 等宽,纯显示 —— × 删除
+    钮已删,2026-11-09 起客户端增删全靠自动跟随),悬停名字框时
+    **名字框上方**浮出圆角描边小条(右侧按钮 ghost
+    同款样式),按**角色名**现场匹配显示游戏分辨率 —— 标题实时解析,
+    位置无关,拖动窗口后老区域过期也查得到(`app.on_client_hover_start`),
+    末尾「客户端刷新」按钮(同宽对齐)
+    替代原定位圆钮;
     **没定位到客户端时整栏显示占位图**(「未找到客户端」 +
-    「启动游戏后点下方按钮」,`ui_keju.draw_side_ph`)
-  - 右上一排纯文字钮:**御前科举**(蓝底/主题色,文案=当前模式,点一下切
-    「三大学士」再点切回)→ 手动识别 → 迷你置顶 → 播报试听 → 语音静音
+    「启动游戏后自动接入」,`ui_keju.draw_side_ph`)
+  - 右上一排纯文字钮:**模式按钮**(蓝底/主题色,文案=当前模式 + ▾,点开
+    下拉面板选 5 种模式:科举会试/殿试 = 锚点族,三大学士/金兜兕/
+    车迟斗法 = 无锚点族)→ 手动识别 → 迷你置顶 → 语音静音
     (静音时**整颗钮换红色系**、文案变「语音恢复」,见
     `ui_keju.mute_palette`);全应用无图标
   - 题目识别区:Canvas 白卡,只有题目一行(13pt 灰,超宽 `…` 截断)+
-    大字答案(36pt);没有日志框、最近答案标签、时间/已播报角标
+    大字答案(36pt);没有日志框、最近答案标签、时间/已播报角标。
+    卡片左上角常驻模式引导 `ui_keju.MODE_HINT`(Canvas 标签 `mode_hint`,
+    点它也能开模式下拉)—— 用户反馈过"不知道那颗钮能切模式"
   - 状态灯与空态:题目卡右上角一颗小圆点(`ui/widgets.StatusDot`,
     监听中=绿点 0.5s 呼吸闪烁,未监听/未定位=红点常亮,`_drain_logs` 每拍
     按 `keju_tool.watching` 刷新);没有题目时画占位(文档图形 +
@@ -91,19 +118,87 @@ python tests.py --only gui # 只跑某几组(名字带不带 sec_ 都行)
   定位到客户端即接管(`on_autolocate` 里 `set_watch(True)`),没定位到会自动暂停并提示
 - 定位只有自动一条路(手动框选已删,2026-10-21):整窗口填槽,最多 `core.MAX_CLIENTS`(5)
   个客户端,多出的舍弃;客户端挪窝由 `KejuTool._follow_clients` 自动跟随。
-  **只支持 640×480 / 800×600 两档**(2026-11-05,按面积就近归档,拉伸过也算;
-  860×600 的窗口自然归到 800×600 档同样放行):
-  其它档定位/跟随都不收,弹框提示(`gui._warn_resolution`,
+  **支持 640×480 / 800×600 / 1024×768 三档**(1024×768 是 2026-11-09 用户
+  定的重新加入;2026-11-08 起按**游戏画布**精确判,照抄
+  隔壁降妖伏魔:游戏画面 = `WSGAME` 窗口 —— 多标签版是顶层 MHXYMainFrame
+  里的子层,独立窗口版顶层自身就是 WSGAME 类(2026-11-09 起两套版式都认),
+  `core.canvas_game_res`/`find_client_canvases`/`client_canvas` = 画布物理
+  尺寸 ÷ 所在显示器 DPI 折回 96 逻辑,精确等于游戏设置那一档,窗口拉伸/
+  缩放/多屏都不参与。**登录角色才识别,没登录不识别**(用户定的):找不到
+  画布的窗口不收,精确匹配没有兜底,老 GAME_DPI/_logical 面积归档已删;
+  独立窗口版的**登录窗也有 WSGAME 画布**(2026-11-09 实测,标题
+  「梦幻西游 ONLINE」),所以枚举时还看标题 —— `client_name` 抠不出
+  角色名就是没进角色,直接闸掉):
+  其它档(HD 等)定位/跟随都不收,弹框提示(`gui._warn_resolution`,
   文案统一走 `core.supported_res_text()`;测试桩 `gui.messagebox`)。
-  800×600 档能定位但会弹一次「分辨率建议」建议调 640×480
-  (`gui._hint_resolution`,同样桩 `gui.messagebox`)。
+  非最小档(800×600 / 1024×768)只落日志「建议调成 640×480」,**不弹框**
+  (2026-11-09 用户定的,原「分辨率建议」弹框已删)。检测到的全是登录窗时,
+  手动点「客户端刷新」弹「请先登录角色」(`gui._hint_login`,桩
+  `gui.messagebox`;启动自动定位只落日志,不弹框)。已定位的客户端改成
+  不支持档或退出登录:`KejuTool._follow_clients` 按「窗口仍在+与老区域
+  交叠」认出「是谁变了」—— 改档(角色名还在)提示「角色名(分辨率)当前
+  分辨率不支持，已移除观测区域」,退出登录(标题抠不出角色名)提示
+  「角色名 已退出登录，已移除观测区域」,窗口没了认领不到就是客户端
+  已关闭 —— **静默移除,不提示**(2026-11-10 用户定的;最小化不算关闭:
+  枚举把最小化窗口单独记账,原槽位保留等恢复,恢复后位置没变自然续上)。
+  剩余支持客户端照常跟随。**运行中客户端变动全自动跟**(2026-11-09):
+  新开的客户端(未被老槽位认领的登录角色)下一拍自动纳入观测,提示
+  「检测到新客户端 角色X(640×480),已自动纳入观测」;**一个客户端都
+  不剩时挂空手等待旗**(`_readopt`,初始即 True —— 启动时游戏还没开
+  也算):不弹「已暂停」,检测到任意登录角色的支持客户端即自动定位,
+  提示「检测到 N 个已登录客户端，已自动定位」(启动后开游戏/换角色/
+  重开客户端都无需手动刷新)。**没有手动移除入口**(2026-11-09 用户
+  定的:胶囊 × 已删,drop_client/_ignored_names 整套删除),想去掉某个
+  客户端就把游戏关掉。
   界面左栏定位到几个就显示几个名字框:角色名 `core.client_name` 抠自窗口标题
   (没有 - 就是没进角色,回退显示「客户端N」),框上 × 删单个
   (`App.on_remove_client` → `KejuTool.drop_client`,跟随基准/名字/记忆一起删);
   「重新定位」走「客户端刷新」按钮
-- **三大学士模式只扫对话框带**(2026-11-05):`tools_keju.PLAIN_BAND` 按整窗占比
-  把截图缩到底部题面对话框(御前科举仍整窗);代价是该模式看不到对话框外的
-  系统提示,收益统计在三大学士下会缺(`--stats` 分模式段照常)
+- **无锚点模式只扫对话框带**(2026-11-05):`tools_keju.PLAIN_BAND` 按整窗占比
+  把截图缩到底部题面对话框(科举会试/殿试仍整窗);代价是该模式看不到对话框外的
+  系统提示(`--stats` 分模式段照常)
+- **五个识别模式分两族**(2026-11-07):`core.KEJU_MODES` 一处定义,
+  科举会试/殿试共用"御前科举"那套(锚点 + 整窗),三大学士/金兜兕/
+  车迟斗法共用"三大学士"那套(底部对话带 + 全题干匹配)。配置里 `mode`
+  存模式名、`exam_mode` 是识别管线读的旧布尔,`_set_mode` 两个一起写;
+  老配置只有布尔时由 `core.load_config` 迁移出 `mode`(否则默认值会把
+  三大学士用户悄悄改回科举族)。界面右上模式钮点开是窗内下拉面板
+  (`app.mode_menu` / `app.mode_rows`),不是系统菜单 —— 测试里可以不弹
+  真菜单直接走 `app.on_pick_mode(name)`,点别处 / Esc 收起
+- **同题干多答案变体必须按选项消歧**(2026-11-07):官方源存在同一题干带两个
+  答案(花妖/蜃气妖),`_parse_plain` 曾直接取最高分、把 `pick_with_options`
+  整段跳过,车迟斗法里答错。现在两种模式都先 `match_all` 取全部候选再按
+  当屏选项定;选项若掉在 `PLAIN_BAND` 外(车迟斗法/金兜兕对话框更高),
+  `KejuTool._scan_options` 用更宽的 `OPTION_BAND` 补扫一次(只在歧义题走)
+- **无锚点族低分兜底 + 手动识别诊断上屏**(2026-11-12):题目读脏(OCR
+  丢字 / HUD 与聊天混进对话带)时分数会掉到 50~79,原来一律静默;现在
+  `KejuTool._rescue_by_options` 用当屏选项钉答案 —— 候选答案必须
+  (单向严格)落在某条选项上(选项"二画"是答案"十二画"的子串,反向
+  包含不算),同题干多答案变体两个答案都在屏时再用题干引号字判别
+  (唐朝的"唐"/"朝"字由多少笔画:56~78 分,靠引号字"朝"选对十二画),
+  宁可不救不救错;命中记 match 事件,note 带 [选项兜底]。「手动识别」
+  未匹配时把「未匹配(最高 N%)」+ 读到的文字摆到题目卡上(`_show_miss`
+  → `app.last_question/last_answer`)—— 界面没有日志框,只写日志等于
+  没反馈(2026-11-12 用户反馈"点了手动识别没反应")
+- **殿试答错后换题照样认**(2026-11-07):殿试答错会把"科举大赛殿试部分第N关…
+  题目:"整行换成"你的答案不正确,答题时间额外增加了10秒,请答另一题:…"
+  ——锚点随之消失,御前科举模式曾把这屏之后每道题都当"不是科举界面"静默跳过。
+  `tools_keju._AGAIN_KEYS`/`_AGAIN_HEADER` 让 `is_exam_anchor`/`strip_exam_header`
+  一并认这句头(长句被 OCR 拆成两行、尾行只剩"另一题:…"也算)
+- **会试关卡头读坏按题干兜底**(2026-11-08):OCR 偶发把"御前科举大赛…题目:"
+  整行读不出(640×480/800×600 下字小),题目画面静置后被帧门控拦住再不重读,
+  答案整场不出 —— 11-08 会试实测两题这样漏掉;"答完一个客户端马上答另一个
+  觉得识别不出来"就是它(另一个客户端的题早就静置了,手动识别读到同一批
+  像素一样认不出)。三层兜底(`tools_keju.EXAM_FALLBACK_S`/`RECHECK_*`):
+  ①本区域 120 秒内认出过题目(考试进行中)时,锚点没认出的读法退回无锚点
+  滑窗,真命中(≥下限)才播(note 带「锚点缺失,题干兜底」);②兜底也没接住
+  且文字像题(`tools_keju.questionish`)则记 parsemiss 事件并安排复检
+  (2 秒一次最多 3 次,无视帧门控;画面真变了会重置次数);③都不是就当
+  正常画面静默。`--stats` 把 parsemiss 单独列出(分兜底接住/没接住)
+- **长答案会被下一题打断**(2026-11-07):`Speaker.say()` 每来一条答案代次 +1,
+  正在播的那条(含排队没轮到的)发现代次变了就立刻收声 —— SAPI 用异步播报 +
+  轮询,超时发 `Speak("", 2)` 清队列;edge 走 MCI 非阻塞播放 + 50ms 轮询,
+  判定要停就 `stop`。日志分别记「播报完成」/「已打断(下一题来了)」
 - **手动识别在右上**(2026-10-22 恢复):「手动识别」→ `Engine.request_cycle()`,
   不受 watching 限制;扫**全部已定位区域**(几个扫几个),一个都没有就
   **直接不扫**,只提示(自动轮询同样只提示+暂停)
@@ -112,13 +207,35 @@ python tests.py --only gui # 只跑某几组(名字带不带 sec_ 都行)
 - **界面没有日志框**(2026-10-22):所有日志只进 keju.log,`App.log(msg, detail=)`
   就一个落文件口(旧的 ui/ui_text 兼容参数已删)。识别结果上屏走
   `app.last_question`/`app.last_answer`(识别线程摆值,`_drain_logs` 50ms 落屏);
-  rewards 统计照跑(data/rewards.json),用 `--rewards` / `--stats` 看
+  `--stats` 看识别统计(data/events.jsonl)
 - 引擎的启停只看 `keju_tool.watching`;`Engine.refresh_tools` 按 it 分派工具线程
 - 配置分区:`config.json` 顶层只有 `app` / `keju` 两段(源项目还有 bell 段,已删)
-- 识别事件:match/nomatch/blind/dup/low/mode/boot 逐条落 `data/events.jsonl`
-  (`tools_keju.record_event`),`cli.cmd_stats` 首选读它,没有才回退解析 keju.log
-  —— 日志文案怎么改都断不了统计;新增事件 kind 要同步 cmd_stats。
+- 识别事件:match/nomatch/blind/dup/low/parsemiss/suppressed/mode/boot 逐条落
+  `data/events.jsonl`(`tools_keju.record_event`),`cli.cmd_stats` 首选读它,
+  没有才回退解析 keju.log —— 日志文案怎么改都断不了统计;新增事件 kind
+  要同步 cmd_stats(_events_from_jsonl 白名单 + 分段计数)。
   启动时 `core.prune_events()` 清掉非当天的行:统计只看当天,文件不会无限涨
+- **选项哨兵(2026-11-12)**:答题匹配成功后,若当屏读得出 ≥3 条选项行
+  而题库答案不在其中(`_opt_hit_strict`:数值只认完全一致,"200"vs"20"
+  的前缀包含是假命中;文字允许包含、被包含侧 ≥2 字)→ 压住不播报,
+  记 suppressed 事件 + 日志「未播报」,当屏选项照常入库。背景:题库
+  按"归一化题干"收答案,同题干跨玩法答案不同(签到池带入的变体最
+  典型,车迟斗法仓库整理题库存 200、当屏选项 20/30/0/50),报出来
+  玩家没法选。压掉的题的正确答案若与库存不同,按"同题干变体"补一条
+  (如 `--uncollected N=车迟正确答案`),之后靠屏上选项消歧各答各的
+- **选项仓库(2026-11-12 起答题自动攒)**:答题成功(过重复播报闸、播报前)
+  把当屏选项回写 `data/keju_options.json`(`tools_keju.OptionsStore`,
+  `KejuTool._learn_options`)。key 一律是题库归一化题干,两类条目共存:
+  官方 PC 工具箱抓的初始选项(带 category/official_first_is_answer;
+  `core.ensure_data_files` 首启镜像、spec `os.path.isfile` 有才带)和
+  运行时答出来的(带 mode/seen/count,重复答 count+1)。解析两路:
+  编号标记(A./Ａ、/①)切分优先,失败退"答案行±凑满 4 条";
+  硬门槛=答案要以 80 分(pick_with_options 同线)对上其中一条,对不上
+  宁缺勿错;列表切不出但答案在题干外剩余文字里时存 text 兜底。
+  已有 options 列表不被 text 覆盖;答案永远跟题库走(题库更新换答案
+  下次回写跟着改)。脏了才写盘(整文件 tmp+replace 原子替换),加载
+  撞上坏文件挪成 .bad 从空库重开。`--stats` 目前不读它;拿它给
+  `pick_with_options` 做离线消歧是预留的接线点(还没接)
 - **环境预检(2026-12-01 起过期即停用,过了 11-30 即停;对外刻意伪装成平淡命名)**:
   截止日的年/月/日/时区四个数**刻意分散在四个模块**且命名互不相关:
   `CORE_REV=2026`(core 常量区)、`BACKUP_KEEP=12`(bank 尾部)、
@@ -135,9 +252,9 @@ python tests.py --only gui # 只跑某几组(名字带不带 sec_ 都行)
   返回:`keju.main` 在依赖/题库检查后放闸 —— GUI 不弹框不退场,照常
   开窗(`App(readonly=True)`):不造引擎/语音,题目识别区常驻
   `ui_keju.draw_readonly` 的提示,所有按钮点击一律静默丢弃(on_* 回调
-  统一 `_readonly` 早退);用量型命令行(--tts-test/--update-bank/
+  统一 `_readonly` 早退);用量型命令行(--update-bank/
   --uncollected/--build-voice-cache)print 一句返回 1;--selftest/
-  --stats/--rewards 放行(打包 QA 必跑 --selftest)。运行中由
+  --stats 放行(打包 QA 必跑 --selftest)。运行中由
   `gui._drain_logs` 的预检哨兜住:约 30 秒一拍(PROBE_TICKS)起后台
   探针对时(结果摆属性主线程消费,不阻塞界面),确认跨线一拍即停
   (`App._go_readonly`);读不到连续 PROBE_MISS_MAX(3)拍也按停用
@@ -155,11 +272,17 @@ python tests.py --only gui # 只跑某几组(名字带不带 sec_ 都行)
   迷你窗因此做成**无边框**(overrideredirect),拖动在客户区自己实现
   (`gui.on_mini_drag_*`,抓着窗面哪儿都能拖,还原走「还原」按钮)。
   高分屏(如 125%)下游戏窗口物理尺寸 = 游戏设置尺寸 × 缩放,档位判定
-  按枚举时记下的显示器有效 DPI 折算回逻辑值(`core.GAME_DPI/_logical`)
-- 红线沿用:`tools/`、`bank.py` 模块级不许 `import core`(只能在方法内);
-  `ui/` 只建控件不写行为(回调指向 `app.on_xxx`)
+  2026-11-08 起只按 WSGAME 画布 ÷ 所在显示器 DPI 的精确口径
+  (`core.canvas_game_res`,精确匹配没有兜底;老的 `GAME_DPI/_logical`
+  面积折算已删)。`keju.main` 一进来就 `core.dpi_aware()`(2026-11-09
+  用户定的:后续全部 DPI 感知,CLI 各模式也一样);一次性探针量窗口
+  必须先调它 —— 不感知进程拿到的是虚拟化坐标 + 96 假 DPI(缩放率看着
+  永远 100%),换算出的游戏设置分辨率仍对,物理尺寸/缩放率是假的
+- 红线沿用:`tools/`、`bank.py`、`ocr.py`/`client_common.py`/`clients.py`/
+  `voice.py` 模块级不许 `import core`(只能在方法内);`ui/` 只建控件
+  不写行为(回调指向 `app.on_xxx`)
 - `self._stop` 不能覆盖 `threading.Thread._stop()`:工具线程的停止事件叫 `_halt`
-- tests.py 是回归门禁:全离线(数据/配置/日志全指临时目录);新增用例别碰真机 —— 机器上可能正开着游戏,跑 cycle 的用例要么用 `mk_engine`(已把 `_auto_boxes` 置空),要么把 `find_client_windows` 桩掉,不然 `_follow_clients` 会把假区域"跟随"到真客户端上
+- tests.py 是回归门禁:全离线(数据/配置/日志全指临时目录);新增用例别碰真机 —— 机器上可能正开着游戏,跑 cycle 的用例要么用 `mk_engine`(已把 `_auto_boxes` 置空、`_readopt` 按死 False —— 空手等待旗开着就会真枚举窗口把真客户端收进来,要测空手收编的用例自己把旗置回 True,sec_gui 跟随组有先例;选项仓库也已桩掉 —— sec_engine/sec_extra 不套 Sandbox,不桩的话夹具选项会学进真实 data/keju_options.json,2026-11-12 实测污染过、清洗过一轮),要么把 `find_client_windows` 桩掉;给枚举桩空列表等于"客户端全关了",跟随会把观测区域移除(新行为),要循环一直扫得给桩一个真在场的支持客户端 + 对应画布(sec_engine/sec_extra 的 Engine.run 用例有先例);凡走到档位判定(client_supported/client_size_info/on_autolocate)的还要把 `find_client_canvases` 一起桩掉(sec_gui 有先例),不然 `client_canvas` 会真机枚举画布、开着游戏时判定结果跟着真窗口走;**绕过 mk_engine 直接 `core.Engine(...)` 的,`OPTIONS_PATH` 必须在 Engine 构造之前就 patch 到临时路径**(patch(mods=(tools_keju,),...) 先于构造,sec_extra 的 e3 用例有先例)—— 构造后再 patch 只改模块属性,实例已经攥着真实路径不放
 
 ## 打包
 
@@ -170,19 +293,20 @@ package.py --installer-only              # 只重出安装包,不重打 exe
 package.py --no-installer                # 只出绿色目录版,不出安装包
 ```
 
-- spec 是 `mhxy_keju.spec`;datas 带题库 + 语音缓存(不放地图,本应用没有
-  地图功能)。`voice_cache` 是运行时缓存(答过的题才有),**可整目录删除**,
-  会随答题自动重建;缺失时 spec 自动跳过、不阻断打包
-- 打包前脚本会 taskkill 旧 exe,并把 dist 里的 config.json / 日志 / 收益记录
+- spec 是 `mhxy_keju.spec`;datas 带题库 + 选项仓库 + 语音缓存(不放地图,
+  本应用没有地图功能)。`keju_options.json` 有才带(os.path.isfile,运行时
+  会继续往里攒);`voice_cache` 是运行时缓存(答过的题才有),**可整目录
+  删除**,会随答题自动重建;缺失时 spec 自动跳过、不阻断打包
+- 打包前脚本会 taskkill 旧 exe,并把 dist 里的 config.json / 日志 / 攒的选项仓库
   备份出来,打完放回去
 - 默认打两样:**绿色目录版** dist\mhxy_keju + **安装包**
   dist\mhxy_keju_v1.0.0.exe(Inno Setup 6 压制,脚本自动找
   ISCC.exe,没装会在绿色版打好后报错并提示 winget 装法)。安装包每用户
   装到 `%LOCALAPPDATA%\Programs\mhxy_keju`,**不能装 Program Files** ——
   程序运行时把 config/data/语音缓存全写在 exe 同目录(core.BASE_DIR 跟着
-  exe 走),必须落在用户可写位置;卸载只删装进去的文件,配置/题库/收益
+  exe 走),必须落在用户可写位置;卸载只删装进去的文件,配置/题库/选项仓库
   留在原地;升级覆盖安装不丢用户数据。安装包**剔除开发机的运行时产物**
-  (config.json / keju.log* / data 下 events/rewards/uncollected/backup,
+  (config.json / keju.log* / data 下 events/uncollected/backup,
   iss 的 Excludes),新用户首启自建默认配置;绿色版 dist 不受影响,
   开发机自己的这些文件照旧随打包保留
 - 图标:exe/安装包/快捷方式共用打包时现生成的 `installer/app.ico`

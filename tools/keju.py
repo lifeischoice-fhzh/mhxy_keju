@@ -1,6 +1,6 @@
 """科举大赛:一个完全独立的功能。
 
-自己一条线程、自己的区域和状态,匹配(锚点/滑窗/全屏聚类)和收益统计都在这里。
+自己一条线程、自己的区域和状态,匹配(锚点/滑窗/全屏聚类)都在这里。
 跟 core / bank 只有一条单行道:调用时现取截图 / OCR / 文本归一化这些基础设施,
 题库(读写/匹配)走 bank.py —— 这是唯一被允许的共享,所以 patch() 换掉
 core / bank 里的名字,它立刻跟着变。
@@ -38,17 +38,48 @@ REPEAT_GUARD_S = 5
 # (实测:≥84% 是真题 + OCR 小噪声,≤75% 全是误报;配置阈值只能往上调,调不低)
 MIN_MATCH_PCT = 80
 
-# 三大学士(无锚点)只扫底部题面对话框:整窗其余全是噪声(任务追踪/聊天/名字),
+# 选项兜底的最低分:题目读脏(OCR 丢字/混入 HUD 与聊天)时分数会掉到
+# 50~79,按 MIN_MATCH_PCT 一律不播 —— 但选项是强信号:候选答案必须
+# (严格)就是当屏某条选项才救;同题干多答案变体(答案都在屏上时)再用
+# 题干里的引号字判别。2026-11-12 车迟斗法实测:唐朝的"唐"/"朝"字由
+# 多少笔画,最脏的读法 56 分、最好的 78 分,屏上四选项里两个变体的
+# 答案同时在 —— 光按分数会选错,引号字"朝"才唯一对上。
+# 门槛 50 是给 find_questions 的预筛(内部再减 15)留余量,真正的闸
+# 是选项命中与变体判别,分数只用来排序。
+RESCUE_MIN_PCT = 50
+_QUOTED = re.compile(r'[“「『"]([^”」』"]{1,4})[”」』"]')
+
+# 无锚点模式(三大学士/金兜兕/车迟斗法)只扫底部题面对话框:整窗其余全是噪声,
 # 还拖慢 OCR。对话框是固定 UI,按客户端占比框一条带,四周留足余量
 # (按 860×600 档实测对话框约横 6%~88%、纵 45%~70%)。
 PLAIN_BAND = (0.04, 0.42, 0.91, 0.73)   # (左, 上, 右, 下) 占整窗比例
+# 歧义题的选项兜底:车迟斗法/金兜兕的对话框更高,选项可能掉在 PLAIN_BAND
+# 之外;这时再扫一条更宽的底部带(只在"同题干多答案"且带内没认出选项时走)
+OPTION_BAND = (0.04, 0.34, 0.91, 0.96)
+
+# 会试锚点偶发整行读不出(OCR 误读/对话框渐入):此时题干本体通常仍读得全。
+# 本区域最近认出过题目(EXAM_FALLBACK_S 内)时,锚点没认出的读法退回
+# "全题干匹配"兜底,真命中(≥下限)才采用 —— 2026-11-08 会试实测:两题的
+# 关卡头整屏读不出,画面静置后被帧门控拦住再不重读,答案整场没出,
+# 连按手动识别读到同一批像素也一样认不出
+EXAM_FALLBACK_S = 120
+# 兜底也没接住时的复检:过 RECHECK_DELAY_S 无视帧门控再读一次,最多
+# RECHECK_MAX 次(OCR 对同一画面不是每次读得一样,多读一两轮常就认出了;
+# 次数用完就停,画面真变了会重新给预算)
+RECHECK_DELAY_S = 2.0
+RECHECK_MAX = 3
+
+
+def _band(x1, y1, x2, y2, band):
+    """整窗矩形 -> 按占比算出的子区域。"""
+    w, h = x2 - x1, y2 - y1
+    return (int(x1 + w * band[0]), int(y1 + h * band[1]),
+            int(x1 + w * band[2]), int(y1 + h * band[3]))
 
 
 def plain_band(x1, y1, x2, y2):
-    """整窗矩形 -> 三大学士模式下真正要 OCR 的对话框带(对应 PLAIN_BAND)。"""
-    w, h = x2 - x1, y2 - y1
-    return (int(x1 + w * PLAIN_BAND[0]), int(y1 + h * PLAIN_BAND[1]),
-            int(x1 + w * PLAIN_BAND[2]), int(y1 + h * PLAIN_BAND[3]))
+    """整窗矩形 -> 无锚点模式真正要 OCR 的对话框带(对应 PLAIN_BAND)。"""
+    return _band(x1, y1, x2, y2, PLAIN_BAND)
 
 
 # 锚点触发:块里有"科举",且出现"大赛"/"题目",或"第X关"的结构。
@@ -58,10 +89,24 @@ _ANCHOR_STAGE = re.compile(r"第\s*[0-9一二三四五六七八九十百零两]*
 # 剥离头:同样容忍"御""大赛"被读丢(前面的杂字一并切掉,如被叠进来的聊天/名字)
 _EXAM_HEADER = re.compile(r".*?科举(?:大赛)?.*?题目[:：]?")
 
+# 殿试答错后换题:"你的答案不正确,答题时间额外增加了10秒,请答另一题:…"
+# 这一屏会把"科举大赛殿试部分第N关…题目:"整行换掉,锚点随之消失
+# (2026-11-07 实测):死认科举头的话,后面每道换来的题都会被当"不是科举界面"跳过。
+# 长句可能被 OCR 拆成两行(尾行只剩"另一题:…"),所以"另一题"也算数。
+_AGAIN_KEYS = ("另一题", "其他题", "下一题")
+_AGAIN_HEADER = re.compile(r".*?(?:另一题|其他题|下一题)[:：]?")
+
+
+def _is_again_header(text: str) -> bool:
+    """这段文字是不是"答错了,请答另一题"的换题对话框头。"""
+    return any(k in (text or "") for k in _AGAIN_KEYS)
+
 
 def is_exam_anchor(text: str) -> bool:
     """这块文字是不是"御前科举大赛第X关:…题目:"的准考证头(容忍 OCR 错字)。"""
     t = text or ""
+    if _is_again_header(t):
+        return True
     if "科举" not in t:
         return False
     return ("大赛" in t or "题目" in t
@@ -69,8 +114,11 @@ def is_exam_anchor(text: str) -> bool:
 
 
 def strip_exam_header(text: str) -> str:
-    """剥掉"御前科举大赛第X关:这一关考的是XXX。题目:"头,返回裸题干。"""
-    return _EXAM_HEADER.sub("", text, count=1)
+    """剥掉准考证头/换题提示头,返回裸题干。"""
+    t = text or ""
+    if _is_again_header(t):
+        return _AGAIN_HEADER.sub("", t, count=1)
+    return _EXAM_HEADER.sub("", t, count=1)
 
 
 def extract_anchored_question(blocks):
@@ -277,6 +325,20 @@ def record_event(kind: str, **fields) -> None:
         pass
 
 
+# 像题干的文字(问句字样):"锚点没认出"的读法靠它决定要不要记事件/复检
+_QUESTION_KEYS = ("作者", "出自", "是谁", "哪位", "什么", "哪一", "哪个",
+                  "正确的是", "指的是")
+
+
+def questionish(text: str, norm: str | None = None) -> bool:
+    """这段文字像不像一道题干:长度够,且有问句字样(问号/哪/什么…)。"""
+    if norm is None:
+        import core
+        norm = core.normalize(text)
+    return len(norm) >= MIN_QUESTION_CHARS and (
+        "？" in text or "?" in text or any(k in text for k in _QUESTION_KEYS))
+
+
 def note_uncollected(bank, text: str, options: str = "") -> str:
     """读到像题目、但分数到不了下限时调用。
 
@@ -289,11 +351,7 @@ def note_uncollected(bank, text: str, options: str = "") -> str:
     norm = core.normalize(text)
     # 长度门槛跟答题门槛一致:题库里最短的真题只有 4 字,
     # 按 8 字卡会把这类短题漏出"疑似未收录"清单
-    looks_like_question = len(norm) >= MIN_QUESTION_CHARS and (
-        "？" in text or "?" in text
-        or any(k in text for k in ("作者", "出自", "是谁", "哪位", "什么",
-                                   "哪一", "哪个", "正确的是", "指的是")))
-    if not looks_like_question:
+    if not questionish(text, norm):
         return ""
     best, score = bank.match(text, 0)
     if best is None or score < 50:
@@ -353,275 +411,219 @@ def add_manual_question(question: str, answer: str,
     return True
 
 
-# 当天答题收益(银两/经验/物品)按天累计,跨启动保留
-REWARD_PATH = os.path.join(BASE_DIR, "data", "rewards.json")
+# "题干 -> 屏上四个选项"仓库:官方工具箱抓来的初始选项 + 运行时每答一题
+# 回写的当屏选项,越攒越全。文件可整删(删了只是丢已攒的选项,下次答题重新攒)
+OPTIONS_PATH = os.path.join(BASE_DIR, "data", "keju_options.json")
 
 # 滑窗匹配的窗口数上限:只防极端花屏把单次扫描拖成秒级。普通整窗 OCR 只有
 # 几十个块,远到不了这里;预筛是单指标,但窗口数真到 3000 时也会到数百毫秒级。
 # 600 的旧上限曾在 300+ 块干扰的屏幕上静默截断,把屏幕下方的真题漏掉。
 MAX_SCAN_WINDOWS = 3000
 
-# ---- 奖励提示的识别(文案取自真实日志) ----
-#   "你得到了66580点经验，6831两银子"
-#   "连续答对3题，鬼王令+1你得到了61358点经验，7320两银子"
-#   "你获得了2点成就点。你获得了定魂珠"
-_RE_EXP = re.compile(r"([\d,]{2,})\s*点\s*经验")
-_RE_SILVER = re.compile(r"([\d,]{2,})\s*两\s*银")
-_RE_ITEM_N = re.compile(r"([\u4e00-\u9fa5·]{2,6})\s*[×xX+＋]\s*(\d{1,3})")
-# 物品用"你获得了X"这类系统提示;要求"你"在前,免得把玩家聊天里的
-# "我获得了XX"也当成自己的收益
-_RE_ITEM_GOT = re.compile(r"你(?:获得|得到|恭喜(?:你)?(?:获得)?|奖励)[了]?\s*"
-                          r"([\u4e00-\u9fa5·]{2,8})")
-_REWARD_VERBS = ("获得", "得到", "奖励", "恭喜")
-_REWARD_STOP = ("成就点", "经验", "银子", "点数", "技能", "速度", "等级", "帮贡",
-                # 科举活动道具(连对奖励),不算收益物品
-                "鬼王令", "天王令", "地王令")
-# "恭喜你完成会试，共用时9分1秒。" —— 这行落轮:用时 + 是否拿到物品奖励
-_RE_ROUND_SEC = re.compile(r"共用时\s*(?:(\d+)\s*分)?\s*(\d+)\s*秒")
-_RE_ROUND_MIN = re.compile(r"共用时\s*(\d+)\s*分")
-ROUND_PASS_SECONDS = 600     # 10 分钟内答完 -> 固定物品奖励
-# 同一条奖励消息会一直挂在聊天区,被反复 OCR 到 —— 靠"同一帧里出现几次"
-# 这个上限来去重:多开时同一条消息会在同一帧里出现 N 次(几个客户端就几次)
-REWARD_TTL = 180.0          # 秒:超过这个时间同样的一行算新的一次奖励
 
+def _boxes_overlap(a, b):
+    """两个 [x1,y1,x2,y2] 矩形是否相交(重叠面积为正)。
 
-def scan_rewards(blocks) -> dict:
-    """从这一轮 OCR 的文字块里挑奖励信息。
-
-    返回 {"exp": {数值: 帧内次数}, "silver": {...},
-          "items": {"名字": {件数: 帧内次数}}, "round_sec": 秒数|None}。
-    只认有把握的数字(经验/银两)、明确的物品文案,以及"共用时X分Y秒"这种落轮提示。
+    跟随认「谁改了档」用:改分辨率一般原位重摆,新老矩形必然交叠。
     """
-    exp: dict = {}
-    silver: dict = {}
-    items: dict = {}
-    round_sec = None
+    return a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
 
-    def bump(d, k, n=1):
-        d[k] = d.get(k, 0) + n
 
-    for b in blocks:
-        text = b.get("text") or ""
-        if "共用时" in text:                    # 落轮:用时/达标
-            m = _RE_ROUND_SEC.search(text)
-            if m:
-                round_sec = int(m.group(1) or 0) * 60 + int(m.group(2))
-            else:
-                m = _RE_ROUND_MIN.search(text)
-                if m:
-                    round_sec = int(m.group(1)) * 60
-        if not any(k in text for k in ("经验", "两银") + _REWARD_VERBS):
+# ---- 选项采集:答完一题把当屏四个选项回写 data/keju_options.json ----
+
+# 屏上选项的编号标记:"A. xxx B. xxx" / "Ａ、xxx" / "①xxx"。
+# 有标记就切得准;游戏里多数选项是纯一行一个,没有标记,那路走按行聚类
+_OPTION_MARKERS = re.compile(
+    r"[Ａ-Ｄa-dA-D]\s*[.．、:：]|[(（][1-4][)）]|[①②③④]")
+
+
+def split_options_markers(text: str) -> list:
+    """按 A./B./① 等编号标记把选项文本切成列表;切不出 3 段返回空。
+
+    第一个标记之前的部分是题干尾巴,丢掉(从第一个标记之后开始算)。
+    """
+    m = _OPTION_MARKERS.search(text or "")
+    if not m:
+        return []
+    segs = [s.strip(" \t,，、;；。") for s in _OPTION_MARKERS.split(text[m.end():])]
+    segs = [s for s in segs if s]
+    return segs if len(segs) >= 3 else []
+
+
+def _option_hit(answer_norm: str, option: str) -> bool:
+    """采集定位用:答案是否(近似)就是这条选项。
+
+    数值答案只认完全一致("200"对"20"/"0"的前缀包含是假命中,会把
+    选项窗口选错);文字答案允许包含关系(被包含侧 >= 2 字)。
+    """
+    import core
+
+    onorm = core.normalize(option)
+    if not onorm:
+        return False
+    if onorm == answer_norm:
+        return True
+    if onorm.isdigit() or answer_norm.isdigit():
+        return False
+    short, long = sorted((onorm, answer_norm), key=len)
+    return len(short) >= 2 and short in long
+
+
+def _opt_hit_strict(ans_norm: str, option: str) -> bool:
+    """答案是否(严格)就是这条选项 —— 选项哨兵专用。
+
+    与采集定位的 _option_hit 现在同一套规则(数值完全一致 / 文字包含
+    且被包含侧 >= 2 字);哨兵独立成函数是留出分化空间 —— 消歧决策
+    本身仍走 bank.pick_with_options 的 partial 80 硬线,不在此处。
+    """
+    return _option_hit(ans_norm, option)
+
+
+def option_lines(rblocks, qwin):
+    """题干块之外的候选选项行(答案无关,选项哨兵用)。
+
+    先按编号标记(A./①)切,切不出再按"题干外的短行"取,行首的
+    "A "/"B."编号前缀一并剥掉 —— 哨兵不能像 parse_options 那样拿
+    答案当门槛:答案不在场恰恰是要报警的时候,门槛会把警报一起吞掉。
+    """
+    import core
+    import re
+
+    qwin_set = set(qwin or [])
+    rest = [b.get("text", "").strip() for i, b in enumerate(rblocks)
+            if i not in qwin_set and b.get("text", "").strip()]
+    if not rest:
+        return []
+    segs = split_options_markers(" ".join(rest))
+    if segs:
+        return segs
+    lines = []
+    for t in rest:
+        t = re.sub(r"^[Ａ-Ｄa-dA-D](?:\s*[.．、:：]|\s+)", "", t).strip()
+        if 1 <= len(core.normalize(t)) <= 24:
+            lines.append(t)
+    return lines
+
+
+def parse_options(rblocks, qwin, answer: str):
+    """从识别块里把"题干之外的选项"尽量解析出来。
+
+    返回 (选项列表或None, 原始选项文本)。解析成列表的硬门槛:答案要能
+    对上其中一条(OCR 把聊天/任务文字混进块里时宁可丢弃,不存错的);
+    列表解析失败但答案确实出现在剩余文字里时,把原始文本当兜底带回 ——
+    它跟运行时消歧用的那坨是同一段,拿去 pick_with_options 一样能用。
+    """
+    import core
+    from rapidfuzz import fuzz
+
+    anorm = core.normalize(answer)
+    if not anorm:
+        return None, ""
+    qwin_set = set(qwin or [])
+    lines, rest = [], []
+    for i, b in enumerate(rblocks):
+        if i in qwin_set:
             continue
-        for m in _RE_EXP.finditer(text):
-            v = int(m.group(1).replace(",", ""))
-            if v > 0:
-                bump(exp, v)
-        for m in _RE_SILVER.finditer(text):
-            v = int(m.group(1).replace(",", ""))
-            if v > 0:
-                bump(silver, v)
-        has_verb = any(k in text for k in _REWARD_VERBS)
-        for m in _RE_ITEM_N.finditer(text):
-            name, n = m.group(1), int(m.group(2))
-            if has_verb and not any(s in name for s in _REWARD_STOP):
-                bump(items.setdefault(name, {}), n)
-        if has_verb:
-            m = _RE_ITEM_GOT.search(text)
-            if m:
-                name = m.group(1)
-                if not any(s in name for s in _REWARD_STOP) and len(name) >= 2:
-                    bump(items.setdefault(name, {}), 1)
-    return {"exp": exp, "silver": silver, "items": items,
-            "round_sec": round_sec}
+        t = (b.get("text") or "").strip()
+        if not t:
+            continue
+        rest.append(t)
+        n = core.normalize(t)
+        if 1 <= len(n) <= 24:
+            lines.append(t)
+    if not rest:
+        return None, ""
+    raw = " ".join(rest)
+    hit_raw = fuzz.partial_ratio(anorm, core.normalize(raw)) >= 80
+
+    opts = split_options_markers(raw)
+    if opts and not any(_option_hit(anorm, o) for o in opts):
+        opts = []                                  # 切出来了但没答案:不收
+    if not opts and lines:
+        idx = next((i for i, t in enumerate(lines)
+                    if _option_hit(anorm, t)), None)
+        if idx is not None:
+            lo = max(0, idx - 1)               # 答案行前面捎带一条
+            opts = lines[lo:lo + 4]            # 连它共四条;不够就尽力
+    dedup, seen = [], set()
+    for o in opts:
+        k = core.normalize(o)
+        if k and k not in seen:
+            seen.add(k)
+            dedup.append(o.strip())
+    if len(dedup) >= 3 and any(_option_hit(anorm, o) for o in dedup):
+        return dedup[:4], raw
+    return None, (raw if hit_raw else "")
 
 
-class RewardTally:
-    """当天答题收益:银两 / 经验 / 物品(种类 + 件数),按天累计、跨启动保留。
+class OptionsStore:
+    """题干 -> 屏上选项 的本地仓库(data/keju_options.json)。
 
-    读的人(`--rewards`,可与 GUI 并用)会和科举线程的 feed 并发:
-    不加锁就会撞上"遍历字典时它变了"(RuntimeError),读到的账目也是半截。
-    读/写各自进这把锁,粒度只包住自己这几个办法,不碰工具线程的循环。
-    用 RLock 是因为 feed() 内部还要调 rollover()/save(),普通 Lock 会自锁。
+    文件里既有官方工具箱抓来的初始选项(带 category/official_first_is_answer),
+    也有运行时答过的题回写的选项(带 mode/seen/count);key 一律是题库的
+    归一化题干。同题重复答就 count+1;已有 options 列表的条目不会被
+    纯文本兜底覆盖(列表是更好的形态,先到先得)。脏了才写盘,整文件
+    原子替换;加载坏掉就把原文件挪成 .bad 留证,从空库重开 —— 采集是
+    副产品,任何失败都不能惊动识别线程。
     """
 
-    def __init__(self, path: str = REWARD_PATH):
-        self._lock = threading.RLock()
+    def __init__(self, path: str = OPTIONS_PATH):
         self.path = path
-        self.day = time.strftime("%Y-%m-%d")
-        self.exp = 0
-        self.silver = 0
-        self.items: dict[str, int] = {}
-        self.rounds: list[dict] = []           # 已完成的轮次(按客户端分)
-        self._cur: dict[str, dict] = {}        # 客户端 -> 本轮累计
-        self._peak: dict[str, tuple] = {}      # key -> (帧内最多出现几次, 时间)
+        self.entries: dict = {}
+        self.meta: dict = {}
+        self._dirty = False
         self._load()
 
-    # ---- 持久化 ----
     def _load(self):
         try:
             with open(self.path, encoding="utf-8") as f:
                 d = json.load(f)
+            self.entries = dict(d.get("entries") or {})
+            self.meta = dict(d.get("_meta") or {})
+        except FileNotFoundError:
+            pass                                       # 首次运行:空库起家
         except Exception:
-            return
-        if d.get("day") == self.day:           # 只认当天的,换天就从头算
-            self.exp = int(d.get("exp", 0) or 0)
-            self.silver = int(d.get("silver", 0) or 0)
-            self.items = {k: int(v) for k, v in (d.get("items") or {}).items()}
-            self.rounds = list(d.get("rounds") or [])[-20:]
-            self._cur = {k: {"exp": int(v.get("exp", 0)),
-                             "silver": int(v.get("silver", 0)),
-                             "items": dict(v.get("items") or {})}
-                          for k, v in (d.get("cur") or {}).items()}
+            try:
+                os.replace(self.path, self.path + ".bad")
+            except Exception:
+                pass
+
+    def learn(self, nkey: str, question: str, answer: str,
+              options=None, text: str = "", mode: str = "") -> bool:
+        """答完一题回写当屏选项。count/seen 每次都动,恒返回 True(要写盘)。"""
+        e = self.entries.get(nkey)
+        if e is None:
+            self.entries[nkey] = e = {"question": question, "answer": answer}
+        if options and not e.get("options"):
+            e["options"] = [str(o) for o in options]
+            e.pop("text", None)                        # 列表到手,text 兜底撤下
+        elif text and not e.get("options") and not e.get("text"):
+            e["text"] = str(text)[:200]
+        if e.get("answer") != answer:
+            e["answer"] = answer                       # 题库更新换答案时跟着走
+        e["count"] = int(e.get("count") or 0) + 1
+        e["seen"] = time.strftime("%Y-%m-%d")
+        if mode:
+            e["mode"] = mode
+        self._dirty = True
+        return True
 
     def save(self):
+        if not self._dirty:
+            return
         try:
-            with self._lock:
-                os.makedirs(os.path.dirname(self.path), exist_ok=True)
-                tmp = self.path + ".tmp"
-                with open(tmp, "w", encoding="utf-8") as f:
-                    json.dump({"day": self.day, "exp": self.exp,
-                               "silver": self.silver, "items": self.items,
-                               "rounds": self.rounds, "cur": self._cur},
-                              f, ensure_ascii=False)
-                os.replace(tmp, self.path)
+            self.meta["learned"] = sum(1 for e in self.entries.values()
+                                       if e.get("seen"))
+            self.meta["updated_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+            os.makedirs(os.path.dirname(self.path), exist_ok=True)
+            tmp = self.path + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump({"_meta": self.meta, "entries": self.entries},
+                          f, ensure_ascii=False, indent=1)
+            os.replace(tmp, self.path)
+            self._dirty = False
         except Exception:
             pass
-
-    def rollover(self):
-        """跨天了就把当天那一笔清零重来。"""
-        with self._lock:
-            today = time.strftime("%Y-%m-%d")
-            if today != self.day:
-                self.day = today
-                self.exp = self.silver = 0
-                self.items = {}
-                self.rounds = []
-                self._cur = {}
-                self._peak = {}
-                self.save()
-
-    # ---- 计数 ----
-    def _acc(self, key, n_now, now):
-        """同一帧里出现 n_now 次:只把比"这轮窗口内见过的最大次数"多出来的算进去。
-
-        这样同一条消息反复被 OCR 到不会重复计,而多开时同一条消息在一帧里
-        出现几次就计几次。
-        """
-        peak, ts = self._peak.get(key, (0, now))
-        if now - ts > REWARD_TTL:
-            peak = 0                            # 窗口过期:重新起算
-        grew = max(0, n_now - peak)
-        self._peak[key] = (max(peak, n_now), now)
-        return grew
-
-    def feed(self, blocks, slot=1) -> list[str]:
-        """喂一轮 OCR 结果,返回本帧新计入的说明(进日志)。
-
-        slot: 这条画面属于哪个客户端(槽位号 1~5)。多开时每个客户端各算各的
-        "单轮收益",互不串账;落轮提示("共用时X分Y秒")也只结自己这一轮的账。
-        整段进锁:`--rewards` 等读方可能同时在读,不能读到写了一半的状态。
-        """
-        with self._lock:
-            return self._feed(blocks, slot)
-
-    def _feed(self, blocks, slot) -> list[str]:
-        self.rollover()
-        found = scan_rewards(blocks)
-        now = time.time()
-        news = []
-        rk = str(slot)                   # 槽位号:1~5,多开各算各的
-        cur = self._cur.setdefault(rk, {"exp": 0, "silver": 0, "items": {}})
-        for v, n in found["exp"].items():
-            grew = self._acc(f"{rk}|exp:{v}", n, now)
-            if grew:
-                self.exp += v * grew
-                cur["exp"] += v * grew
-                news.append(f"经验 +{v}" + (f"×{grew}" if grew > 1 else ""))
-        for v, n in found["silver"].items():
-            grew = self._acc(f"{rk}|silver:{v}", n, now)
-            if grew:
-                self.silver += v * grew
-                cur["silver"] += v * grew
-                news.append(f"银两 +{v}" + (f"×{grew}" if grew > 1 else ""))
-        for name, counts in found["items"].items():
-            for cnt, n in counts.items():
-                grew = self._acc(f"{rk}|item:{name}x{cnt}", n, now)
-                if grew:
-                    self.items[name] = self.items.get(name, 0) + cnt * grew
-                    cur["items"][name] = cur["items"].get(name, 0) + cnt * grew
-                    news.append(f"{name}×{cnt * grew}")
-        if found["round_sec"] is not None:
-            # 这一轮结束了:把它记成"某客户端的一轮",用时/达标一并留档
-            sec = int(found["round_sec"])
-            if cur["exp"] or cur["silver"] or cur["items"]:
-                self.rounds.append({
-                    "slot": rk, "sec": sec,
-                    "pass": sec <= ROUND_PASS_SECONDS,
-                    "exp": cur["exp"], "silver": cur["silver"],
-                    "items": dict(cur["items"]),
-                    "ts": time.strftime("%H:%M:%S")})
-                self.rounds = self.rounds[-20:]          # 只留最近 20 轮
-                news.append(f"本轮完成:用时 {sec // 60}分{sec % 60}秒"
-                            + ("(达标)" if sec <= ROUND_PASS_SECONDS
-                               else "(超时)"))
-            self._cur[rk] = {"exp": 0, "silver": 0, "items": {}}
-        if len(self._peak) > 800:               # 防内存膨胀
-            cut = sorted(self._peak.items(), key=lambda kv: kv[1][1],
-                         reverse=True)[:400]
-            self._peak = dict(cut)
-        if news:
-            self.save()
-        return news
-
-    def summary(self) -> str:
-        """给 `--rewards` 看的一行:当天累计(银两 / 经验 / 物品种类数 + 明细)。"""
-        with self._lock:
-            if not (self.exp or self.silver or self.items):
-                return "今日收益: 还没有记录(答题过程中会自动统计)"
-            exp = (f"{self.exp / 10000:.1f}万" if self.exp >= 10000
-                   else str(self.exp))
-            parts = [f"银两 {self.silver:,} 两", f"经验 {exp}"]
-            if self.items:
-                top = sorted(self.items.items(), key=lambda kv: -kv[1])
-                detail = "、".join(f"{k}×{v}" for k, v in top[:3])
-                if len(top) > 3:  # 一行放不下:种类数前面已经写了
-                    detail += "…"
-                parts.append(f"物品 {len(self.items)} 种({detail})")
-            else:
-                parts.append("物品 0 种")
-            return "今日收益: " + " · ".join(parts)
-
-    # ---- 单轮(按客户端分开) ----
-    def round_lines(self) -> list[str]:
-        """每个客户端一行:最近一轮的用时/达标 + 该轮银两/经验/物品。
-
-        多开时逐个客户端列,不混在一起;没数据的客户端不占行。
-        """
-        with self._lock:
-            lines = []
-            for rk in sorted(self._cur, key=lambda k: int(k) if k.isdigit()
-                             else 99):
-                cur = self._cur[rk]
-                done = [r for r in self.rounds if r.get("slot") == rk]
-                name = f"{rk}号"
-                if cur["exp"] or cur["silver"] or cur["items"]:
-                    parts = [f"银两 {cur['silver']:,}", f"经验 {cur['exp']}"]
-                    if cur["items"]:
-                        it = "、".join(f"{k}×{v}"
-                                      for k, v in cur["items"].items())
-                        parts.append(f"物品 {len(cur['items'])} 种({it})")
-                    lines.append(f"{name} 本轮进行中: " + " · ".join(parts))
-                if done:
-                    r = done[-1]
-                    mark = "达标" if r["pass"] else "超时"
-                    parts = [f"用时 {r['sec'] // 60}分{r['sec'] % 60}秒({mark})",
-                             f"银两 {r['silver']:,}", f"经验 {r['exp']}"]
-                    if r["items"]:
-                        it = "、".join(f"{k}×{v}"
-                                      for k, v in r["items"].items())
-                        parts.append(f"物品 {len(r['items'])} 种({it})")
-                    lines.append(f"{name} 最近一轮: " + " · ".join(parts))
-            return lines
 
 
 class KejuTool(threading.Thread):
@@ -642,19 +644,26 @@ class KejuTool(threading.Thread):
         self._nomatch_near = 0.0       # 最近一次漏答时"最接近的候选"分数
         self._no_region_streak = 0
         self._region_last = {}         # 每个区域各自记住上一题(多客户端互不干扰)
+        self._region_fallback_ts = {}  # 各区域最近认出题目结构的时间(锚点兜底窗口)
+        self._region_recheck = {}      # key -> 下次复检时刻(锚点没认出时安排)
+        self._region_retries = {}      # key -> 本画面已复检次数
         self._region_frame = {}        # 区域画面指纹,用于跳过未变化的OCR
         self._region_ocr_ts = {}       # 各区域上次OCR的时间(超时复检)
         self._region_ref = {}          # 各区域上次OCR时的画面(内容比对基准)
         self._region_dirty = {}        # 各区域画面开始变化的时间
         self._region_t_detect = {}     # 各区域最近一次'检测到变化'的时刻
         self._last_announce_ts = 0.0   # 最近一次播报时刻(自适应轮询用)
-        # 显式传路径:REWARD_PATH 在测试里会被指到临时目录
-        self.rewards = RewardTally(REWARD_PATH)  # 当天收益
+        # 选项仓库:测试里 OPTIONS_PATH 指到临时目录(不写启动日志,
+        # 识别/界面日志有既定的行文契约,别添行)
+        self.options = OptionsStore(OPTIONS_PATH)
         # "自动定位"当时记下的客户端矩形(引擎重建会造新工具:从配置把当前
         # 区域接过来,自动跟随不断线)
         boxes = [list(r) for r in (self.cfg("regions") or []) if r]
         self._auto_boxes = boxes or None
         self._client_names: list = []   # 各槽位的角色名(抠自窗口标题,见 set_auto_boxes)
+        # 空手等待旗:一个客户端都没跟到时(启动没开游戏/全退出登录/全被关闭)
+        # 挂着,跟随周期检测到登录角色的支持客户端就自动定位收编
+        self._readopt = True
         self._follow_ts = 0.0          # 上次检查客户端有没有挪窝
         self._req_cycle = False        # 有待办:手动识别(界面按的)
         self._req_force = True         # 手动识别一律 force=True
@@ -698,7 +707,9 @@ class KejuTool(threading.Thread):
 
         传 key 只忘这一个区域(清单个槽位),不传就是全部(区域整体变了)。
         """
-        for d in (self._region_last, self._region_frame, self._region_ref,
+        for d in (self._region_last, self._region_fallback_ts,
+                  self._region_recheck, self._region_retries,
+                  self._region_frame, self._region_ref,
                   self._region_ocr_ts, self._region_t_detect,
                   self._region_dirty):
             if key is None:
@@ -713,31 +724,13 @@ class KejuTool(threading.Thread):
         不足 MAX_CLIENTS 的槽位补 None。只传 boxes(如清空)时名字一并清掉。
         """
         import core
+        if boxes:
+            self._readopt = False      # 跟上客户端了,空手等待旗收起
         self._auto_boxes = ([[int(v) for v in b] for b in boxes]
                             if boxes else None)
         names = list(names or [])
         self._client_names = (names + [None] * core.MAX_CLIENTS
                               )[:core.MAX_CLIENTS]
-
-    def drop_client(self, i):
-        """界面上胶囊 × 删掉第 i 个槽位的客户端(工具侧的收尾)。
-
-        从跟随基准和角色名里把这一位去掉(整体前移,和界面里区域列表的
-        删法一致),那一格的画面/题目记忆一并作废。必须在界面改写配置里
-        的 regions **之前**调:这里要按旧配置数出它是紧凑表里的第几个 box。
-        """
-        import core
-        regions = [r for r in (self.cfg("regions") or [])][:core.MAX_CLIENTS]
-        regions += [None] * (core.MAX_CLIENTS - len(regions))
-        if not regions[i]:
-            return
-        k = sum(1 for r in regions[:i] if r)   # 前面非空的个数 = 紧凑表下标
-        if self._auto_boxes and 0 <= k < len(self._auto_boxes):
-            self._auto_boxes = (self._auto_boxes[:k]
-                                + self._auto_boxes[k + 1:]) or None
-        if 0 <= i < len(self._client_names):
-            self._client_names.pop(i)
-        self.forget_region_memory(key=tuple(regions[i]))
 
     # ---- 自己的配置 ----
     def cfg(self, key, default=None):
@@ -810,6 +803,67 @@ class KejuTool(threading.Thread):
         """匹配下限。固定 MIN_MATCH_PCT:低于它的读法一律不播报(防误报)。"""
         return float(MIN_MATCH_PCT)
 
+    def _show_miss(self, brief, detail=""):
+        """手动识别的可见结论:界面没有日志框,失败原因摆到题目卡上。
+
+        自动路径不走这里(每轮都闪结论会把正在看的答案冲掉);只有用户
+        亲手点了「手动识别」、结果又什么都没答出来时才需要解释一句。
+        """
+        self.app.last_question = detail or brief
+        self.app.last_answer = brief
+
+    def _rescue_by_options(self, rblocks, qwin):
+        """无锚点族的低分兜底:不到 MIN_MATCH_PCT 时,用当屏选项钉答案。
+
+        55~79 分的读法通常是"题目读脏了"而不是"不是题"(车迟斗法把题目、
+        HUD、聊天混在同一条带里)。选项是强信号,但要防两种误救:
+        ①候选答案必须严格就是当屏某条选项;②同题干多答案变体里会有
+        两个答案同时在场(唐朝的"唐"/"朝"字由多少笔画)—— 这时用题干
+        里被引号括起来的关键字判别,唯一对上才采用。宁可不救,不救错。
+        返回 (entry, score) 或 None。
+        """
+        import core
+
+        def opt_exact(ans: str, option: str) -> bool:
+            """答案是否(单向严格)就是这条选项。
+
+            不能像 _opt_hit_strict 那样双向包含:选项"二画"是答案"十二画"
+            的子串,反向包含会把别题答案误认成当屏选项。只认相等,或
+            答案整段落在选项里(选项带编号/前后缀时)。
+            """
+            onorm = core.normalize(option)
+            if not ans or not onorm:
+                return False
+            return ans == onorm or (len(ans) >= 2 and ans in onorm)
+
+        hits, _best = find_questions(self.app.bank, rblocks, RESCUE_MIN_PCT,
+                                     use_anchor=False)
+        if not hits:
+            return None
+        top = max(hits.values(), key=lambda v: v[0])
+        olines = option_lines(rblocks, top[3])
+        if len(olines) < 3:
+            return None
+        opt_hits = [(e, s, tx) for s, e, tx, _w in hits.values()
+                    if any(opt_exact(core.normalize(e["a"]), o)
+                           for o in olines)]
+        if not opt_hits:
+            return None
+        if len({e["a"].strip() for e, _s, _tx in opt_hits}) == 1:
+            e, s, _tx = max(opt_hits, key=lambda t: t[1])
+            return e, s
+        # 多个变体的答案都在当屏选项里:题干引号字判别,唯一对上才采用
+        marks = set()
+        for _e, _s, tx in opt_hits:
+            marks |= set(_QUOTED.findall(tx))
+        if not marks:
+            return None
+        marked = [(e, s) for e, s, _tx in opt_hits
+                  if set(_QUOTED.findall(e["q"])) & marks]
+        if len({e["a"].strip() for e, _s in marked}) == 1:
+            return max(marked, key=lambda t: t[1])
+        return None
+
     @staticmethod
     def _leftover_text(rblocks, qwin):
         """题干块之外的文字 —— 通常就是四个选项;区域没框到选项时返回空串。"""
@@ -819,29 +873,124 @@ class KejuTool(threading.Thread):
                         if i not in qwin_set)
         return rest if len(core.normalize(rest)) >= 6 else ""
 
-    def _parse_keju(self, rblocks):
-        """【御前科举模式】必须存在"御前科举大赛…题目:"结构锚点。
+    @staticmethod
+    def _options_decide(candidates, options_text):
+        """选项文字里是否已经出现某个候选答案(够 80:pick_with_options 的硬线)。"""
+        import core
+        from rapidfuzz import fuzz
 
-        找到 -> 剥头取裸题干,返回 (裸题干, 题干块下标集合, None);
+        onorm = core.normalize(options_text)
+        return bool(onorm) and any(
+            fuzz.partial_ratio(core.normalize(e["a"]), onorm) >= 80
+            for e, _s in candidates)
+
+    def _scan_options(self, region):
+        """歧义题兜底:按更宽的底部带再 OCR 一次,把更大范围的文字当选项。
+
+        只在"同题干多答案变体、且本轮带内没认出任何一个答案"时走 ——
+        车迟斗法/金兜兕的对话框比三大学士高,选项可能整排在 PLAIN_BAND 外。
+        """
+        x1, y1, x2, y2 = region
+        try:
+            crop = self.screen.grab(_band(x1, y1, x2, y2, OPTION_BAND))
+            blocks = self.ocr.recognize_blocks(crop)
+        except Exception:
+            return ""
+        return " ".join(b.get("text", "") for b in blocks)
+
+    def _learn_options(self, entry, rblocks, qwin, mode_name, olines=None):
+        """答题成功后把当屏选项回写选项仓库(data/keju_options.json)。
+
+        rblocks/qwin 就是刚才识别用的那批块:题干块之外的文字通常就是
+        四个选项。解析+答案对不上就只落原始文本兜底;olines 传入了
+        (选项哨兵压答路径)就跳过解析直接用 —— 那条路径的选项已经
+        验证过是当屏真实选项。全程吞异常:采集是副产品,识别线程
+        永远优先。
+        """
+        try:
+            if olines is None:
+                options, text = parse_options(rblocks, qwin, entry["a"])
+            else:
+                options, text = olines[:4], ""
+            self.options.learn(entry["n"], entry["q"], entry["a"],
+                               options=options, text=text,
+                               mode=mode_name or "")
+            self.options.save()
+        except Exception:
+            pass
+
+    def _parse_keju(self, rblocks):
+        """【科举会试/殿试】必须存在"御前科举大赛…题目:"结构锚点。
+
+        找到 -> 剥头取裸题干,返回 (裸题干, 题干块下标集合);
         找不到 -> 返回 None(当前区域不是该界面的题,跳过)。
         """
         import core
         bare, qwin = extract_anchored_question(rblocks)
         if not qwin or len(core.normalize(bare)) < MIN_QUESTION_CHARS:
             return None
-        return bare, qwin, None
+        return bare, qwin
 
-    def _parse_plain(self, rblocks):
-        """【三大学士模式】不要锚点:区域内滑窗直接全题干匹配。
+    def _parse_plain(self, rblocks, require_hit: bool = False):
+        """【无锚点模式:三大学士/金兜兕/车迟斗法】不要锚点:区域内滑窗直接全题干匹配。
 
-        返回 (题干文本, 题干块下标集合或None, 预匹配结果或None)。
+        返回 (题干文本, 题干块下标集合或None)。候选由 cycle 统一走
+        `match_all` 全列取回 —— 同一题干常有两个答案变体(官方源如此,
+        如花妖/蜃气妖),必须交给 pick_with_options 按当屏选项消歧,
+        只挑分数最高的那个等于掷硬币。
+        require_hit: 只认真命中(≥下限),命中为空就返回 None ——
+        会试锚点兜底走这个口,绝不能拿整屏文字去硬配(那会误报)。
         """
         thr = self._match_floor()
         hits, _ = find_questions(self.app.bank, rblocks, thr, use_anchor=False)
         if hits:
             sc, en, tx, win = max(hits.values(), key=lambda v: v[0])
-            return tx, win, (en, sc)
-        return "".join(b["text"] for b in rblocks), None, None
+            return tx, win
+        if require_hit:
+            return None
+        return "".join(b["text"] for b in rblocks), None
+
+    def _sticky(self, key) -> bool:
+        """这个区域最近认出过题目结构(考试正在进行)→ 锚点兜底窗口内。"""
+        return (time.time() - self._region_fallback_ts.get(key, 0.0)
+                < EXAM_FALLBACK_S)
+
+    def _arm_recheck(self, key):
+        """给这一区域安排一次复检:过 RECHECK_DELAY_S 无视帧门控再读一次。
+
+        OCR 对同一画面不是每次读得一样(对话框渐入/抖动),多读一两轮常就
+        认出了。次数用完就停,别烧 CPU;画面真变了会重新给预算(循环里
+        fresh 时清 _region_retries)。
+        """
+        n = self._region_retries.get(key, 0)
+        if n >= RECHECK_MAX:
+            return
+        self._region_retries[key] = n + 1
+        self._region_recheck[key] = time.time() + RECHECK_DELAY_S
+
+    def _note_parse_miss(self, key, rblocks, force, olog):
+        """锚点没认出来:考试中(兜底窗口内)像题的文字记 parsemiss + 安排复检。
+
+        纯聊天/世界画面(不像题)不记不重试 —— 那是正常状态,不是漏答;
+        没在考试(兜底窗口外)也一样,只有手动识别必须有可见结果。
+        """
+        text = " ".join(b.get("text", "") for b in rblocks)
+        like_q = self._sticky(key) and questionish(text)
+        first = False
+        if like_q:
+            first = (self._region_retries.get(key, 0) == 0
+                     and key not in self._region_recheck)
+            self._arm_recheck(key)
+            if first:
+                record_event("parsemiss", recovered=0, text=text[:80])
+        if force:
+            # 手动识别必须有可见结果,沿用既有提示(统计/习惯都认这句)
+            olog("读到文字但没认出科举题目:"
+                 f"{text[:60]}…(可切「三大学士/金兜兕/车迟斗法」试试)")
+            self._show_miss("没认出科举题目(可切无锚点模式试试)",
+                            text[:40])
+        elif like_q and first:
+            olog(f"读到文字但没认出题目,稍后自动重试: {text[:40]}…")
 
     def keju_cycle(self, force: bool):
         import core
@@ -860,15 +1009,17 @@ class KejuTool(threading.Thread):
         # 客户端挪窝了就先把区域跟过去,再按区域截图
         self._follow_clients()
 
-        # 带槽位号(1~5):奖励统计要按客户端分开归轮
-        regions = [(i + 1, r) for i, r in
-                   enumerate(self.cfg("regions") or []) if r]
+        regions = [r for r in (self.cfg("regions") or []) if r]
         if not regions:
             # 没有区域:直接不扫(手动也不扫),提示 + 暂停自动监听
             self._no_region_streak += 1
+            await_relogin = getattr(self, "_readopt", False)
             if force or self._no_region_streak == 1:
-                olog("还没有定位到客户端 —— 点「客户端刷新」定位后再识别")
-            if self.watching:
+                if await_relogin:
+                    olog("等待游戏客户端登录角色,检测到后自动开始识别")
+                else:
+                    olog("还没有定位到客户端 —— 点「客户端刷新」定位后再识别")
+            if self.watching and not await_relogin:
                 self.watching = False
                 olog("没有定位到客户端,已暂停(定位后自动接管)")
             return
@@ -876,18 +1027,28 @@ class KejuTool(threading.Thread):
         found_text = False
         _t_cycle0 = time.time()
         exam_mode = bool(self.cfg("exam_mode", True))
-        for slot, region in regions:
+        mode_name = self.cfg("mode", "") or ("御前科举" if exam_mode
+                                             else "三大学士")
+        for region in regions:
             x1, y1, x2, y2 = region
             key = tuple(region)
+            # 之前安排的复检到点了:无视帧门控把这块画面再读一次
+            due_at = self._region_recheck.get(key)
+            recheck = due_at is not None and time.time() >= due_at
+            if recheck:
+                self._region_recheck.pop(key, None)
             try:
-                # 三大学士只扫底部对话框带(整窗其余全是噪声);御前科举整窗
+                # 无锚点的模式(三大学士/金兜兕/车迟斗法)只扫底部对话框带
+                # (整窗其余全是噪声);科举三试整窗扫
                 crop = self.screen.grab(region if exam_mode
                                         else plain_band(x1, y1, x2, y2))
             except Exception as e:
                 olog(f"截图失败: {e}")
                 return
             fresh = self._frame_gate(key, crop)
-            if not force and not fresh:
+            if fresh:
+                self._region_retries.pop(key, None)   # 新画面:复检预算重给
+            if not force and not fresh and not recheck:
                 # 强制识别(手动按钮)也走一遍门控:只为更新参考帧,
                 # 否则下一轮会把刚识别过的同一画面再识别一次
                 continue  # 画面无新内容,跳过OCR
@@ -895,27 +1056,30 @@ class KejuTool(threading.Thread):
             rblocks = self.ocr.recognize_blocks(crop)
             _t_ocr = time.time() - _t_ocr0
             if not rblocks:
+                if self._sticky(key):
+                    # 对话框渐入会有一两帧空白:别让参考帧一更新就死等画面变化
+                    self._arm_recheck(key)
                 continue
             found_text = True
-            # 顺手统计奖励(银两/经验/物品):跟题目识别无关,两种模式都算
-            try:
-                for gain in self.rewards.feed(rblocks, slot):
-                    self.app.log(f"[奖励]{gain}")
-            except Exception:
-                pass
             # 两套解析逻辑,按模式选择(互不干扰)
+            sticky_note = ""
             if exam_mode:
                 parsed = self._parse_keju(rblocks)
+                if parsed is None and self._sticky(key):
+                    # 锚点偶发整行读不出(OCR 误读/对话框渐入):题干本体
+                    # 通常仍读得全,退回无锚点滑窗兜底,真命中才采用
+                    parsed = self._parse_plain(rblocks, require_hit=True)
+                    if parsed is not None:
+                        sticky_note = " [锚点缺失,题干兜底]"
+                        record_event("parsemiss", recovered=1,
+                                     text=parsed[0][:80])
             else:
                 parsed = self._parse_plain(rblocks)
             if parsed is None:
                 # 御前科举模式下未找到锚点:当前区域不是该界面
-                if force:
-                    olog("读到文字但没认出科举题目:"
-                         f"{' '.join(b['text'] for b in rblocks)[:24]}…"
-                         "(可切「三大学士」模式试试)")
+                self._note_parse_miss(key, rblocks, force, olog)
                 continue
-            bare, qwin, pre = parsed
+            bare, qwin = parsed
             n = core.normalize(bare)
             if len(n) < MIN_QUESTION_CHARS:
                 if force:
@@ -925,6 +1089,11 @@ class KejuTool(threading.Thread):
             last = self._region_last.get(key, "")
             if not force and last and fuzz.ratio(n, last) >= 88:
                 continue  # 该客户端还是同一道题,看下一个
+            # 这块画面认出结构了(题目/开场白):刷新锚点兜底窗口;
+            # 复检待办一并了结 —— 结构都认出来了,不用再重读
+            self._region_fallback_ts[key] = time.time()
+            self._region_retries.pop(key, None)
+            self._region_recheck.pop(key, None)
             if is_exam_prompt(bare):
                 # 考官开场对话("这里是御前科举大赛第N关…你作好答题的准备了吗")
                 # 根本不是题目:直接跳过匹配,免得"科举大赛"几个字被配到
@@ -935,11 +1104,9 @@ class KejuTool(threading.Thread):
             self._region_last[key] = n
 
             _t_m0 = time.time()
-            if pre is not None:
-                entry, score, note = pre[0], pre[1], " [三大学士]"
-                candidates = []
-            else:
-                candidates = self.app.bank.match_all(bare, self._match_floor())
+            # 候选整列取回:同一题干可能有多个答案变体(官方源常见),
+            # 交给 pick_with_options 按当屏选项定,不能只取最高分
+            candidates = self.app.bank.match_all(bare, self._match_floor())
             # 只有"答案不同且分数咬得紧"的候选才算真歧义,才去消歧
             need_disamb = False
             if len(candidates) > 1:
@@ -948,11 +1115,24 @@ class KejuTool(threading.Thread):
                     e2["a"] != top_e["a"] and s2 >= top_s - 10
                     for e2, s2 in candidates[1:])
             # 消歧只用本次OCR的结果:题干块之外的文字(通常就是选项)。
-            # 区域没框到选项时 options_text 为空,退化为取最高分候选。
+            # 区域没框到选项时先留空;无锚点模式的对话框可能更高(车迟斗法),
+            # 带内没认出候选答案就再扫一条更宽的底部带兜底
             options_text = self._leftover_text(rblocks, qwin) if need_disamb else ""
-            if pre is None:
-                entry, score, note = self.app.bank.pick_with_options(
-                    candidates, options_text)
+            if (need_disamb and not exam_mode
+                    and not self._options_decide(candidates, options_text)):
+                options_text = (options_text + " "
+                                + self._scan_options(region)).strip()
+            entry, score, note = self.app.bank.pick_with_options(
+                candidates, options_text)
+            if entry is None and not exam_mode:
+                # 分不够(题目读脏了):用当屏选项把答案钉死再决定
+                rescued = self._rescue_by_options(rblocks, qwin)
+                if rescued is not None:
+                    entry, score = rescued
+                    note = " [选项兜底]"
+            if not exam_mode:
+                note += f" [{mode_name}]"
+            note += sticky_note
             # 考官开场白已在前面拦下,这里写进日志的都是真读到的题干
             olog(f"识别: {bare[:30]}…")
             if entry:
@@ -963,6 +1143,26 @@ class KejuTool(threading.Thread):
                                  f"{entry['q'][:16]}…")
                     record_event("dup")
                     continue
+                # 选项哨兵:当屏明明读得出选项,答案却不在其中 —— 题库
+                # 这条对当前玩法不适用(同题干在不同活动答案不同,签到池
+                # 带入的变体最典型)。报出来玩家按选项根本没法选,宁可不
+                # 报(2026-11-12 车迟斗法实测:仓库整理题库存的是 200,
+                # 当屏选项 20/30/0/50)
+                olines = option_lines(rblocks, qwin)
+                if len(olines) >= 3 and not any(
+                        _opt_hit_strict(core.normalize(entry["a"]), o)
+                        for o in olines):
+                    olog(f"答案「{entry['a']}」不在当屏选项"
+                         f"({'/'.join(olines[:4])})里 —— 疑似该答案属于"
+                         "别的玩法,未播报")
+                    record_event("suppressed", answer=entry["a"],
+                                 options="/".join(olines[:4])[:60])
+                    # 压答路径直接用哨兵读到的选项行入库:答案门槛在这条
+                    # 路径上必然不过,但选项本身是当屏的真实选项
+                    self._learn_options(entry, rblocks, qwin, mode_name,
+                                        olines=olines)
+                    self._nomatch_streak = 0
+                    return  # 本轮此区域已处理
                 self._remember_answered(entry)
                 self.app.last_question = entry["q"]
                 self.app.last_answer = entry["a"]
@@ -977,11 +1177,18 @@ class KejuTool(threading.Thread):
                              answer=entry["a"], response=round(_t_resp, 2),
                              ocr=round(_t_ocr, 2), match=round(_t_match, 2),
                              manual=bool(force))
+                # 顺手把当屏选项攒进选项仓库:下次没屏幕也能消歧/验证
+                self._learn_options(entry, rblocks, qwin, mode_name)
                 self.app.speaker.say(entry["a"])
                 self._last_announce_ts = time.time()
                 self._nomatch_streak = 0
                 return  # 本轮已播报
             self._nomatch_streak += 1
+            if force:
+                # 手动识别的诊断上屏:界面没有日志框,只写日志等于没反馈
+                self._show_miss(
+                    f"未匹配(最高 {self.app.bank.closest(bare):.0f}%)",
+                    bare[:40])
             if self._nomatch_streak == 1:
                 # 没答出的这一刻才算一次"最接近的候选":分数接近=真题没收录
                 # (值得补题库),分数很低=屏幕上根本不是题(聊天/任务栏)
@@ -1018,11 +1225,19 @@ class KejuTool(threading.Thread):
             self._miss_streak = 0
 
     def _follow_clients(self):
-        """客户端被挪动/换了分辨率:自动定位来的区域跟着更新。
+        """客户端被挪动/换了分辨率/开了新的:自动定位来的区域跟着更新。
 
-        每秒最多查一次窗口;客户端最小化/关掉会让数量变化,那时宁可不跟,
-        免得把别的槽位弄丢。不支持的分辨率档(640×480 / 860×600 之外)
-        不在跟随范围:改大后被滤掉,数量对不上就不跟,等下次定位收口。
+        每秒最多查一次窗口。逐老槽位认领「能认出是谁」的变化,移除观测
+        区域并提示,剩余支持客户端照常跟随:
+          - 改成不支持档(如 HD):窗口在、角色名在、画布档不支持
+            -> 「角色名(分辨率)当前分辨率不支持，已移除观测区域」
+          - 退出登录:窗口在、标题抠不出角色名了
+            -> 「角色名已退出登录，已移除观测区域」
+          - 关闭:窗口没了(最小化的不算 —— 枚举把它单独记账,原槽位
+            保留等恢复,恢复后位置没变自然续上);静默移除,不提示
+        未被认领的新登录客户端自动纳入观测;一个客户端都不剩时挂空手
+        等待旗(_readopt),检测到登录角色的支持客户端就自动定位收编 ——
+        启动没开游戏/换角色/重开客户端都不用手动刷新。
         """
         import core
         now = time.time()
@@ -1030,16 +1245,106 @@ class KejuTool(threading.Thread):
             return
         self._follow_ts = now
         if not getattr(self, "_auto_boxes", None):
+            # 空手等待:检测到登录角色的支持客户端就自动定位收编
+            if not getattr(self, "_readopt", False):
+                return
+            try:
+                found, _minimized = core.find_client_windows()
+            except Exception:
+                return
+            found = [(t, b) for t, b in found
+                     if core.client_name(t) and core.client_supported(b)]
+            if not found:
+                return
+            boxes = [[int(v) for v in b] for _t, b in found[:core.MAX_CLIENTS]]
+            names = [core.client_name(t) for t, _b in found[:core.MAX_CLIENTS]]
+            self.set_auto_boxes(boxes, names)
+            mine = self.app.cfg.setdefault("keju", {})
+            mine["regions"] = boxes + [None] * (core.MAX_CLIENTS - len(boxes))
+            self.forget_region_memory()
+            self.app.log(f"[客户端]检测到 {len(boxes)} 个已登录客户端,"
+                         "已自动定位")
             return
         try:
-            found, _minimized = core.find_client_windows()
+            raw, minimized = core.find_client_windows()
         except Exception:
             return
-        found = [(t, b) for t, b in found if core.client_supported(b)]
+        found = [(t, b) for t, b in raw if core.client_supported(b)]
         boxes = [[int(v) for v in b] for _t, b in found[:core.MAX_CLIENTS]]
         if boxes == self._auto_boxes:
             return
         if not core.can_follow_clients(boxes, self._auto_boxes):
+            # 数量变了。逐老槽位认领「能认出是谁」的变化:改成不支持档、
+            # 退出登录、关闭(窗口没了;最小化在 minimized 里单独记账,
+            # 原槽位保留等恢复)—— 都移除观测区域并提示;与老区域交叠的
+            # 支持客户端照常跟随;未被认领的新登录客户端自动纳入观测。
+            drops, keep, moved = [], [], False
+            claimed = set()                # 一个窗口只归一个老槽位(改档的
+            for i, ob in enumerate(self._auto_boxes):   # 窗口变大,可能同时
+                old_name = (self._client_names[i]       # 压住隔壁老区域)
+                            if i < len(self._client_names) else None)
+                hit = None
+                for j, (t, b) in enumerate(raw):
+                    if j in claimed or not _boxes_overlap(b, ob):
+                        continue
+                    claimed.add(j)
+                    if core.client_supported(b):
+                        hit = (t, b, None)
+                    elif core.client_name(t):
+                        hit = (t, b, "tier")
+                    else:
+                        hit = (t, b, "logout")
+                    break
+                if hit is None:
+                    # 窗口认领不到:最小化还在(角色名对得上)就保留原槽位
+                    # 等恢复;真没了就是已关闭,移除观测区域
+                    if (old_name and any(core.client_name(t) == old_name
+                                         for t in minimized)):
+                        keep.append((list(ob), old_name))
+                    else:
+                        drops.append((old_name, None, None, "closed"))
+                    continue
+                t, b, why = hit
+                if why:
+                    drops.append((old_name, t, b, why))
+                else:
+                    bb = [int(v) for v in b]
+                    moved = moved or bb != ob
+                    keep.append((bb, core.client_name(t)))
+            # 新客户端:未被老槽位认领、登录角色、档位支持 —— 自动纳入观测
+            for j, (t, b) in enumerate(raw):
+                if j in claimed:
+                    continue
+                name = core.client_name(t)
+                if not name or not core.client_supported(b):
+                    continue
+                claimed.add(j)
+                canvas = core.client_canvas(b)
+                size = (f"{canvas[1][0]}×{canvas[1][1]}" if canvas else
+                        core.client_size_info(b)[0])
+                keep.append(([int(v) for v in b], name))
+                self.app.log(f"[客户端]检测到新客户端 {name}({size}),"
+                             "已自动纳入观测")
+            for old_name, t, b, why in drops:
+                if why == "tier":
+                    canvas = core.client_canvas(b)
+                    size = (f"{canvas[1][0]}×{canvas[1][1]}" if canvas else
+                            core.client_size_info(b)[0])
+                    self.app.log(f"[客户端]{core.client_name(t)}({size})"
+                                 "当前分辨率不支持，已移除观测区域")
+                elif why != "closed":          # 关闭静默移除,不提示(用户定的)
+                    self.app.log(f"[客户端]{old_name or '客户端'}"
+                                 "已退出登录，已移除观测区域")
+            keep = keep[:core.MAX_CLIENTS]
+            self.set_auto_boxes([bb for bb, _n in keep], [n for _bb, n in keep])
+            mine = self.app.cfg.setdefault("keju", {})
+            mine["regions"] = ([bb for bb, _n in keep]
+                               + [None] * (core.MAX_CLIENTS - len(keep)))
+            self.forget_region_memory()    # 区域变了,旧的画面/题目记忆全作废
+            if keep and (drops or moved):
+                self.app.log(f"[客户端]{len(keep)} 个客户端位置变了,已自动跟随")
+            if not keep:
+                self._readopt = True   # 全部退出登录/改档:等重新登录就自动收编
             return
         names = [core.client_name(t)
                  for t, _b in found[:core.MAX_CLIENTS]]   # 跟随时名字一并刷新

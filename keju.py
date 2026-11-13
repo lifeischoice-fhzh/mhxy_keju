@@ -52,7 +52,6 @@ def main():
     ap.add_argument("--selftest", action="store_true", help="OCR+匹配自检(合成图片)")
     ap.add_argument("--seed", type=int, default=cli.SELFTEST_SEED, metavar="N",
                     help=f"自检抽题种子(默认 {cli.SELFTEST_SEED},可复现;0=每次随机)")
-    ap.add_argument("--tts-test", action="store_true", help="语音播报测试")
     ap.add_argument("--build-voice-cache", type=int, nargs="?", const=0, default=None,
                     metavar="N", help="预合成答案音频到本地缓存(不带N=全部,如 200=前200条)")
     ap.add_argument("--stats", action="store_true", help="统计每题识别/播报耗时")
@@ -60,13 +59,13 @@ def main():
                     help="列出疑似题库未收录的读法;如 --uncollected 1=常建 直接补进题库")
     ap.add_argument("--since", default="", metavar="HH:MM",
                     help="配合 --stats:只看该时刻之后的记录(按当日小时:分钟)")
-    ap.add_argument("--rewards", action="store_true",
-                    help="看今天的答题收益(银两/经验/物品)")
     ap.add_argument("--update-bank", action="store_true", help="检查并更新题库")
     args = ap.parse_args()
 
-    cli_mode = (args.selftest or args.tts_test or args.stats or args.update_bank
-                or args.uncollected is not None or args.rewards
+    core.dpi_aware()           # 全模式一律 DPI 感知(用户定的):坐标/DPI 才是
+                               # 物理真值;已感知过时 shcore 会拒,静默即可
+    cli_mode = (args.selftest or args.stats or args.update_bank
+                or args.uncollected is not None
                 or args.build_voice_cache is not None)
     if cli_mode:
         _ensure_console()          # 打包版才有意义,源码运行无副作用
@@ -90,11 +89,11 @@ def main():
         return 1
 
     # 环境预检不过即停(见 core 环境预检):预检不过的版本不再提供答题能力。
-    # GUI 照常开窗,题目识别区常驻「token已用完」;--selftest/--stats/
-    # --rewards 只是自检与翻旧记录,不具答题能力,放行(--selftest 是打包
-    # QA 的必跑项);其余命令行模式拦下直接退场。
+    # GUI 照常开窗,题目识别区常驻「token已用完」;--selftest/--stats 只是
+    # 自检与翻旧记录,不具答题能力,放行(--selftest 是打包 QA 的必跑项);
+    # 其余命令行模式拦下直接退场。
     readonly = False
-    if not (args.selftest or args.stats or args.rewards):
+    if not (args.selftest or args.stats):
         blocked = core.env_ready()
         if blocked:
             if cli_mode:
@@ -104,8 +103,6 @@ def main():
 
     if args.selftest:
         return cli.cmd_selftest(args.seed)
-    if args.tts_test:
-        return cli.cmd_tts_test()
     if args.update_bank:
         try:
             _, msg = bank.update_bank()
@@ -116,14 +113,11 @@ def main():
             return 1
     if args.stats:
         return cli.cmd_stats(args.since)
-    if args.rewards:
-        return cli.cmd_rewards()
     if args.uncollected is not None:
         return cli.cmd_uncollected(args.uncollected)
     if args.build_voice_cache is not None:
         return cli.cmd_build_voice_cache(args.build_voice_cache)
 
-    core.dpi_aware()
     App(readonly=readonly).run()
     return 0
 

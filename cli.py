@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""命令行层:--selftest / --stats / --uncollected / --rewards / --tts-test 等 cmd_*。
+"""命令行层:--selftest / --stats / --uncollected 等 cmd_*。
 
 从 core.py 搬出来的(2026-10-22):core 只留地基(配置/OCR/截图/语音/引擎调度),
 自检的合成图夹具与统计解析都是"命令行才用"的东西,归这一层。
@@ -11,7 +11,6 @@ import json
 import os
 import random
 import re
-import time
 
 import bank
 import core
@@ -302,46 +301,6 @@ def cmd_selftest(seed: int = SELFTEST_SEED) -> int:
     return 0 if overall else 1
 
 
-def cmd_tts_test() -> int:
-    cfg = core.split_config(core.DEFAULT_CONFIG)
-    sp = core.Speaker(cfg, lambda m: print("[语音]", m))
-    sp.start()
-    if not sp._ready.wait(10) or sp.dead:
-        print("语音引擎启动失败")
-        return 1
-    print(f"语音: {sp.voice_name}(音调 {core.edge_params(cfg)[2]:+d}Hz)")
-    sp.say("梦幻西游 mhxy_keju,语音测试成功。")
-    time.sleep(4)
-    return 0
-
-
-def cmd_rewards() -> int:
-    """打印今天的答题收益(银两/经验/物品明细)。"""
-    rt = tools_keju.RewardTally()
-    rt.rollover()
-    print(rt.summary())
-    for line in rt.round_lines():
-        print("  " + line)
-    if rt.rounds:
-        print("今天已完成的轮次:")
-        for r in rt.rounds:
-            mark = "达标" if r.get("pass") else "超时"
-            items = "、".join(f"{k}×{v}"
-                             for k, v in (r.get("items") or {}).items())
-            print(f"  {r.get('slot')}号 {r.get('ts')} "
-                  f"用时 {r['sec'] // 60}分{r['sec'] % 60}秒({mark}) "
-                  f"银两 {r.get('silver', 0):,} 经验 {r.get('exp', 0)} "
-                  f"物品 {items or '无'}")
-    if rt.items:
-        print("物品明细:")
-        for name, cnt in sorted(rt.items.items(), key=lambda kv: -kv[1]):
-            print(f"  {name} × {cnt}")
-    if not (rt.exp or rt.silver or rt.items):
-        print("答题时奖励提示出现在画面里(系统消息/聊天区)才会统计到;"
-              "区域别只框对话框,整窗口最稳。")
-    return 0
-
-
 def cmd_uncollected(add=()) -> int:
     """列出"疑似题库未收录"的读法(去重、按分数降序)。
 
@@ -507,7 +466,7 @@ def _events_from_jsonl(path: str, since_norm: str) -> list[dict]:
             if since_norm and len(ts) >= 16 and ts[11:16] < since_norm:
                 continue
             if ev.get("kind") in ("match", "nomatch", "blind", "dup", "low",
-                                  "mode", "boot"):
+                                  "parsemiss", "mode", "boot", "suppressed"):
                 ev["ts"] = ts             # 缺 ts 的行也归一,后面按 ts 分段
                 events.append(ev)
     return events
@@ -535,14 +494,15 @@ def cmd_stats(since: str = "") -> int:
         events = [ev for ev in events if str(ev.get("ts", ""))[:10] == day]
     print(f"数据源: {'data/events.jsonl(结构化事件)' if source == 'events' else 'keju.log(文本解析,旧数据)'}")
 
-    # 分模式段:每次启动或切模式都开一段(三大学士那段噪声大,必须分开看)
+    # 分模式段:每次启动或切模式都开一段(无锚点那几种噪声大,必须分开看)
     segs = []
-    mode = "御前科举"
+    mode = core.DEFAULT_MODE
 
     def new_seg(ts):
         segs.append({"ts0": ts, "ts1": ts, "mode": mode, "match": 0,
                      "nomatch": 0, "prompt": 0, "blind": 0, "dup": 0,
-                     "disamb": 0, "low": 0, "resp": [], "near": []})
+                     "disamb": 0, "low": 0, "pmiss": 0, "pmiss_ok": 0,
+                     "optcut": 0, "resp": [], "near": []})
         return segs[-1]
 
     cur = new_seg("")
@@ -550,10 +510,8 @@ def cmd_stats(since: str = "") -> int:
     for ev in events:
         kind, ts = ev["kind"], ev["ts"]
         if kind == "mode":
-            # 普通/三大学士是同一个模式的两种叫法(改了界面文案)
-            name = ev.get("mode", "")
-            mode = ("三大学士" if ("三大" in name or "普通" in name)
-                    else "御前科举")
+            # 兼容老叫法:普通/三大学士是同一模式;「御前科举」归到默认档
+            mode = core.mode_label(ev.get("mode", ""))
             cur = new_seg(ts)
             continue
         if kind == "boot":
@@ -587,15 +545,26 @@ def cmd_stats(since: str = "") -> int:
             cur["dup"] += 1
         elif kind == "low":
             cur["low"] += 1
+        elif kind == "parsemiss":
+            # 题目头(关卡行)被 OCR 读坏:记一次异常,recovered=1 表示
+            # 题干兜底当场接住了(答案已出),=0 表示交给复检
+            cur["pmiss"] += 1
+            if ev.get("recovered"):
+                cur["pmiss_ok"] += 1
+        elif kind == "suppressed":
+            # 选项哨兵:题库答案不在当屏选项里,宁可压住不播报
+            cur["optcut"] += 1
 
     print("== 分模式段:命中率与失败构成 ==")
     print(f"{'时段':<18}{'模式':<9}{'答出':>5}{'漏答':>5}{'命中率':>8}"
           f"{'考官对话':>9}{'空屏':>5}{'消歧':>5}{'抑制':>5}{'平均响应':>9}")
     print("-" * 92)
     tot = {"match": 0, "nomatch": 0, "prompt": 0, "blind": 0, "disamb": 0,
-           "dup": 0, "resp": [], "near": []}
+           "dup": 0, "pmiss": 0, "pmiss_ok": 0, "optcut": 0,
+           "resp": [], "near": []}
     for s in segs:
-        if not (s["match"] or s["nomatch"] or s["blind"] or s["prompt"]):
+        if not (s["match"] or s["nomatch"] or s["blind"] or s["prompt"]
+                or s["pmiss"] or s["optcut"]):
             continue
         asked = s["match"] + s["nomatch"]
         rate = s["match"] / asked * 100 if asked else 0.0
@@ -604,7 +573,8 @@ def cmd_stats(since: str = "") -> int:
         print(f"{span:<18}{s['mode']:<9}{s['match']:>5}{s['nomatch']:>5}"
               f"{rate:>7.0f}%{s['prompt']:>9}{s['blind']:>5}{s['disamb']:>5}"
               f"{s['dup']:>5}{avg:>8.2f}s")
-        for k in ("match", "nomatch", "prompt", "blind", "disamb", "dup"):
+        for k in ("match", "nomatch", "prompt", "blind", "disamb", "dup",
+                  "pmiss", "pmiss_ok", "optcut"):
             tot[k] += s[k]
         tot["resp"] += s["resp"]
         tot["near"] += s["near"]
@@ -617,6 +587,12 @@ def cmd_stats(since: str = "") -> int:
         print(f"      考官开场白(不算题,新版本已过滤) {tot['prompt']} · "
               f"多题消歧 {tot['disamb']} · 重复抑制 {tot['dup']} · "
               f"无文字轮次(空屏) {tot['blind']}")
+        if tot["pmiss"]:
+            print(f"      题目头没认出(OCR 读坏关卡行) {tot['pmiss']} 次,"
+                  f"其中 {tot['pmiss_ok']} 次由题干兜底当场接住")
+        if tot["optcut"]:
+            print(f"      选项压答 {tot['optcut']} 次:题库答案不在当屏选项里"
+                  f"(同题干跨玩法答案不同),宁可不报")
         for ts, sc, txt in sorted(tot["near"], key=lambda x: -x[1])[:15]:
             print(f"      疑似没答出: {ts} 最高 {sc}%  {txt}")
         print("      注:漏答的最高分=0% 只出现在旧日志(那时没记录最接近的分数);"

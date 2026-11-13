@@ -1,0 +1,4727 @@
+{
+ "_meta": {
+  "source": "网易官方PC工具箱题库 xyqtbq.webapp.163.com/tiku/search",
+  "note": "options 为游戏内该题的选项(顺序随机);答案以题库 answer 为准;official_first_is_answer=官方接口把 options[0] 当答案展示",
+  "official_bank_size": 409,
+  "kept": 393,
+  "dropped": 24,
+  "fetched_at": "2026-11-10"
+ },
+ "entries": {
+  "时事通处可以购买西游时讯请问这份报纸不包括哪条内容": {
+   "question": "时事通处可以购买《西游时讯》，请问这份报纸不包括哪条内容？",
+   "options": [
+    "玩家守则",
+    "维护消息",
+    "梦幻新闻",
+    "江湖传闻任务"
+   ],
+   "answer": "玩家守则",
+   "category": "游戏小知识",
+   "official_first_is_answer": true
+  },
+  "门派称谓任务在哪里领取": {
+   "question": "门派称谓任务在哪里领取",
+   "options": [
+    "本门首席大弟子",
+    "国子监",
+    "皇宫",
+    "大唐官府"
+   ],
+   "answer": "本门首席大弟子",
+   "category": "游戏小知识",
+   "official_first_is_answer": true
+  },
+  "门派首席弟子的竞选要求是": {
+   "question": "门派首席弟子的竞选要求是",
+   "options": [
+    "等级≥50、门派贡献度≥600",
+    "等级≥100",
+    "门派贡献度≥100",
+    "游戏时间≥100小时"
+   ],
+   "answer": "等级≥50、门派贡献度≥600",
+   "category": "游戏小知识",
+   "official_first_is_answer": true
+  },
+  "辅助类的技能如强身术炼金术等在哪里学习最合算": {
+   "question": "辅助类的技能（如强身术、炼金术等）在哪里学习最合算",
+   "options": [
+    "帮派",
+    "门派师傅",
+    "自己家中",
+    "战斗中领悟"
+   ],
+   "answer": "帮派",
+   "category": "游戏小知识",
+   "official_first_is_answer": true
+  },
+  "好友栏第一位的梦幻精灵有什么作用": {
+   "question": "好友栏第一位的梦幻精灵，有什么作用",
+   "options": [
+    "快速回答游戏疑问",
+    "任务发放",
+    "广告登记",
+    "领取双倍时间"
+   ],
+   "answer": "快速回答游戏疑问",
+   "category": "游戏小知识",
+   "official_first_is_answer": true
+  },
+  "杂货店出售的摄妖香有什么作用": {
+   "question": "杂货店出售的“摄妖香”有什么作用",
+   "options": [
+    "不再遇到场景等级低于自己等级的怪物暗雷",
+    "产生香味",
+    "恢复气血",
+    "恢复魔法"
+   ],
+   "answer": "不再遇到场景等级低于自己等级的怪物暗雷",
+   "category": "游戏小知识",
+   "official_first_is_answer": true
+  },
+  "杂货店出售一种物品可以在战斗中查看怪物的当前气血这种物品是": {
+   "question": "杂货店出售一种物品，可以在战斗中查看怪物的当前气血，这种物品是",
+   "options": [
+    "洞冥草",
+    "摄妖香",
+    "宠物口粮",
+    "鬼切草"
+   ],
+   "answer": "洞冥草",
+   "category": "游戏小知识",
+   "official_first_is_answer": true
+  },
+  "等级到30级两人友好度到1000的两个玩家可以结婚需要": {
+   "question": "等级到30级、两人友好度到1000的两个玩家可以结婚，需要",
+   "options": [
+    "有一方拥有一间已经入住的房屋",
+    "一定是男方拥有房屋",
+    "一定是女方拥有房屋",
+    "双方没有房屋"
+   ],
+   "answer": "有一方拥有一间已经入住的房屋",
+   "category": "游戏小知识",
+   "official_first_is_answer": true
+  },
+  "以下哪种物品可以将召唤兽变为0级技能和资质随机改变": {
+   "question": "以下哪种物品可以将召唤兽变为0级，技能和资质随机改变",
+   "options": [
+    "金柳露、超级金柳露",
+    "魔兽要诀",
+    "洞冥草",
+    "高级宠物口粮"
+   ],
+   "answer": "金柳露、超级金柳露",
+   "category": "游戏小知识",
+   "official_first_is_answer": true
+  },
+  "让角色自动跟随鼠标跑动的操作方法是": {
+   "question": "让角色“自动跟随鼠标”跑动的操作方法是",
+   "options": [
+    "压下左键几秒钟",
+    "连续单击左键几次",
+    "连续单击右键几次",
+    "压下右键几秒钟"
+   ],
+   "answer": "压下左键几秒钟",
+   "category": "游戏小知识",
+   "official_first_is_answer": true
+  },
+  "梦幻西游里有很多可爱的表情包子例如17表示": {
+   "question": "梦幻西游里有很多可爱的表情包子，例如#17表示",
+   "options": [
+    "晕",
+    "囧",
+    "小二来杯茶",
+    "害羞了"
+   ],
+   "answer": "害羞了",
+   "category": "游戏小知识",
+   "official_first_is_answer": false
+  },
+  "到了50级就可以去钓鱼啦在哪里买鱼竿呢": {
+   "question": "到了50级就可以去钓鱼啦，在哪里买鱼竿呢",
+   "options": [
+    "长寿村和傲来国的捕鱼人",
+    "东海海底的虾兵和蟹将",
+    "长寿村村长",
+    "东海湾的林老汉"
+   ],
+   "answer": "长寿村和傲来国的捕鱼人",
+   "category": "游戏小知识",
+   "official_first_is_answer": true
+  },
+  "师门遭到怪物袭击带上朋友一起消灭他们如果是本门派的弟子还可以额外获得": {
+   "question": "师门遭到怪物袭击？带上朋友一起消灭他们！如果是本门派的弟子还可以额外获得",
+   "options": [
+    "门派贡献度",
+    "帮派贡献度",
+    "大表情使用券",
+    "神兜兜"
+   ],
+   "answer": "门派贡献度",
+   "category": "游戏小知识",
+   "official_first_is_answer": true
+  },
+  "世界频道多少级才能发言": {
+   "question": "世界频道多少级才能发言",
+   "options": [
+    "20级",
+    "30级",
+    "40级",
+    "80级"
+   ],
+   "answer": "20级",
+   "category": "游戏小知识",
+   "official_first_is_answer": true
+  },
+  "在哪里领取每周14个小时的双倍时间更快升级": {
+   "question": "在哪里领取每周14个小时的双倍时间，更快升级",
+   "options": [
+    "长安皇宫门口马副将",
+    "皇宫内魏征",
+    "御林军左统领",
+    "御林军右统领"
+   ],
+   "answer": "长安皇宫门口马副将",
+   "category": "游戏小知识",
+   "official_first_is_answer": true
+  },
+  "初入游戏时会自动获得一只宠物有了它才能携带召唤兽可以调换宠物造型的npc是": {
+   "question": "初入游戏时会自动获得一只宠物，有了它才能携带召唤兽，可以调换宠物造型的NPC是",
+   "options": [
+    "建邺城的宠物仙子",
+    "沉船内商人的鬼魂",
+    "建邺衙门的县令",
+    "长安城的袁天罡"
+   ],
+   "answer": "建邺城的宠物仙子",
+   "category": "游戏小知识",
+   "official_first_is_answer": true
+  },
+  "使用了时间锁的物品或召唤兽在1到180天内将不能解除保护": {
+   "question": "使用了时间锁的物品或召唤兽，在1到180天内将不能解除保护",
+   "options": [
+    "长安城房都尉处使用时间锁",
+    "皇宫魏征处使用时间锁",
+    "宠物仙子处使用时间锁",
+    "找到GM使用时间锁"
+   ],
+   "answer": "长安城房都尉处使用时间锁",
+   "category": "游戏小知识",
+   "official_first_is_answer": true
+  },
+  "书店和铁匠铺裁缝店打工赚钱的区别是": {
+   "question": "书店和铁匠铺、裁缝店打工赚钱的区别是",
+   "options": [
+    "书店不消耗气血",
+    "铁匠铺不消耗体力",
+    "书店不消耗体力",
+    "铁匠铺不消耗气血"
+   ],
+   "answer": "书店不消耗气血",
+   "category": "游戏小知识",
+   "official_first_is_answer": true
+  },
+  "变异召唤兽和普通召唤兽的区别是": {
+   "question": "变异召唤兽和普通召唤兽的区别是",
+   "options": [
+    "颜色不同",
+    "大小不同",
+    "携带等级不同",
+    "允许携带个数不同"
+   ],
+   "answer": "颜色不同",
+   "category": "游戏小知识",
+   "official_first_is_answer": true
+  },
+  "在游戏中玩家角色达到多少级可以摆摊": {
+   "question": "在游戏中，玩家角色达到多少级可以摆摊",
+   "options": [
+    "30级",
+    "20级",
+    "35级",
+    "40级"
+   ],
+   "answer": "30级",
+   "category": "游戏小知识",
+   "official_first_is_answer": true
+  },
+  "等级达到多少级可以在长安城的副本官员处发起副本": {
+   "question": "等级达到多少级可以在长安城的副本官员处发起副本",
+   "options": [
+    "50级",
+    "20级",
+    "40级",
+    "100级"
+   ],
+   "answer": "50级",
+   "category": "游戏小知识",
+   "official_first_is_answer": true
+  },
+  "当道具栏包子充足未进入战斗且没有开启自动的情况下怎样可以快速加血": {
+   "question": "当道具栏包子充足、未进入战斗且没有开启自动的情况下，怎样可以快速加血",
+   "options": [
+    "右键点击人物或召唤兽血条",
+    "左键点击包子",
+    "左键点击人物或召唤兽血条",
+    "双击包子"
+   ],
+   "answer": "右键点击人物或召唤兽血条",
+   "category": "游戏小知识",
+   "official_first_is_answer": true
+  },
+  "60级的玩家可以领取三倍时间三倍时间可以和双倍时间叠加吗": {
+   "question": "≥60级的玩家可以领取三倍时间，三倍时间可以和双倍时间叠加吗",
+   "options": [
+    "可以",
+    "不可以",
+    "看情况",
+    "根据时辰不同变化"
+   ],
+   "answer": "可以",
+   "category": "游戏小知识",
+   "official_first_is_answer": true
+  },
+  "很多玩家拥有属于自己的商店在哪里可以看到这些商店": {
+   "question": "很多玩家拥有属于自己的商店，在哪里可以看到这些商店",
+   "options": [
+    "长安城商会总管",
+    "万事通",
+    "三界包打听",
+    "大唐驿使"
+   ],
+   "answer": "长安城商会总管",
+   "category": "游戏小知识",
+   "official_first_is_answer": true
+  },
+  "多少级可以建造自己的房屋": {
+   "question": "多少级可以建造自己的房屋？",
+   "options": [
+    "≥30级",
+    "≥40级",
+    "≥50级",
+    "≥55级"
+   ],
+   "answer": "≥30级",
+   "category": "游戏小知识",
+   "official_first_is_answer": true
+  },
+  "等级65的单身玩家把什么物品交给长寿村马婆婆就可以领养一个小宝宝": {
+   "question": "等级≥65的单身玩家把什么物品交给长寿村马婆婆，就可以领养一个小宝宝？",
+   "options": [
+    "孤儿名册",
+    "玫瑰",
+    "烟花",
+    "字牌"
+   ],
+   "answer": "孤儿名册",
+   "category": "游戏小知识",
+   "official_first_is_answer": true
+  },
+  "古代成语美轮美奂的意思是": {
+   "question": "古代成语“美轮美奂”的意思是",
+   "options": [
+    "形容房屋高大华丽",
+    "形容美女漂亮",
+    "形容人格好",
+    "形容高风亮节"
+   ],
+   "answer": "形容房屋高大华丽",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "古代成语望其项背的近义词是": {
+   "question": "古代成语“望其项背”的近义词是",
+   "options": [
+    "望其肩项",
+    "望尘莫及",
+    "鞭长莫及",
+    "一望无际"
+   ],
+   "answer": "望其肩项",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "古代成语首当其冲的意思是": {
+   "question": "古代成语“首当其冲”的意思是",
+   "options": [
+    "最先受到攻击或遭到灾难",
+    "冲锋在前",
+    "起表率作用",
+    "站在最前面的人名冲"
+   ],
+   "answer": "最先受到攻击或遭到灾难",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "华夏民族在哪里诞生": {
+   "question": "华夏民族在哪里诞生",
+   "options": [
+    "黄河流域",
+    "长江流域",
+    "两湖地带",
+    "山顶洞"
+   ],
+   "answer": "黄河流域",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "词语芊芊代表着什么颜色": {
+   "question": "词语“芊芊”代表着什么颜色",
+   "options": [
+    "翠绿色",
+    "粉红色",
+    "金黄色",
+    "翠蓝色"
+   ],
+   "answer": "翠绿色",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "古代成语黄钟大吕的意思是": {
+   "question": "古代成语“黄钟大吕”的意思是",
+   "options": [
+    "音乐或言辞庄严高妙",
+    "不常见的乐器",
+    "舞蹈技艺高超",
+    "乐师技巧熟练"
+   ],
+   "answer": "音乐或言辞庄严高妙",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "传说中的八大山人有几个人": {
+   "question": "传说中的“八大山人”有几个人",
+   "options": [
+    "1个人",
+    "8个人",
+    "4个人",
+    "2个人"
+   ],
+   "answer": "1个人",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "与木兰辞并称乐府双璧的是": {
+   "question": "与《木兰辞》并称“乐府双璧”的是",
+   "options": [
+    "《孔雀东南飞》",
+    "《敕勒歌》",
+    "《白头吟》",
+    "《陌上桑》"
+   ],
+   "answer": "《孔雀东南飞》",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "我国最早的表演艺术是": {
+   "question": "我国最早的表演艺术是",
+   "options": [
+    "杂技",
+    "魔术",
+    "刺绣",
+    "舞剑"
+   ],
+   "answer": "杂技",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "飞鸟尽良弓藏狡兔死走狗烹是谁最先说的": {
+   "question": "“飞鸟尽，良弓藏，狡兔死，走狗烹”是谁最先说的",
+   "options": [
+    "范蠡",
+    "韩信",
+    "典韦",
+    "西施"
+   ],
+   "answer": "范蠡",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "古代成语蜀犬吠日的意思是": {
+   "question": "古代成语“蜀犬吠日”的意思是",
+   "options": [
+    "少见多怪",
+    "考虑失当",
+    "敌人凶猛",
+    "力量悬殊"
+   ],
+   "answer": "少见多怪",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "古代成语白龙鱼服的意思是": {
+   "question": "古代成语“白龙鱼服”的意思是",
+   "options": [
+    "形容微服出行的危险",
+    "暗指不懂装懂的门外汉",
+    "形容以弱胜强",
+    "形容人不可貌相"
+   ],
+   "answer": "形容微服出行的危险",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "古代成语开门揖盗的意思是": {
+   "question": "古代成语“开门揖盗”的意思是",
+   "options": [
+    "比喻引狼入室",
+    "比喻为民锄害",
+    "形容窃贼胆大无顾忌",
+    "形容胆小怕事"
+   ],
+   "answer": "比喻引狼入室",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "古代成语爱鹤失众的寓意是": {
+   "question": "古代成语“爱鹤失众”的寓意是",
+   "options": [
+    "因小失大",
+    "不拘小节",
+    "人各有志",
+    "人才难得"
+   ],
+   "answer": "因小失大",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "古代成语白首穷经的寓意是": {
+   "question": "古代成语“白首穷经”的寓意是",
+   "options": [
+    "活到老学到老",
+    "身无分文",
+    "胸无点墨",
+    "照搬教条"
+   ],
+   "answer": "活到老学到老",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "古代成语百巧千穷的寓意是": {
+   "question": "古代成语“百巧千穷”的寓意是",
+   "options": [
+    "比喻有才能者境遇反而不好",
+    "比喻花样百出",
+    "比喻学艺无止境",
+    "形容手下能人众多"
+   ],
+   "answer": "比喻有才能者境遇反而不好",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "古代成语并日而食的寓意是": {
+   "question": "古代成语“并日而食”的寓意是",
+   "options": [
+    "吃不饱，生活很穷困",
+    "工作忙，时间不够用",
+    "饮食乱，生活无规律",
+    "应酬多，身体吃不消"
+   ],
+   "answer": "吃不饱，生活很穷困",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "古代成语不舞之鹤的寓意是": {
+   "question": "古代成语“不舞之鹤”的寓意是",
+   "options": [
+    "指名不副实的无能的人",
+    "指隐居不出的世外高人",
+    "指不甘受辱的有气节的人",
+    "指有才能但未被发现的人"
+   ],
+   "answer": "指名不副实的无能的人",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "古代成语长绳系日的寓意是": {
+   "question": "古代成语“长绳系日”的寓意是",
+   "options": [
+    "想留住时光",
+    "不思进取",
+    "以下犯上",
+    "做事不讲方法"
+   ],
+   "answer": "想留住时光",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "唐朝古琴有几根弦": {
+   "question": "唐朝古琴有几根弦",
+   "options": [
+    "7根",
+    "5根",
+    "8根",
+    "3根"
+   ],
+   "answer": "7根",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "最古老的绘画形式是": {
+   "question": "最古老的绘画形式是",
+   "options": [
+    "壁画",
+    "油画",
+    "铅笔画",
+    "炭笔画"
+   ],
+   "answer": "壁画",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "词语同气是指什么关系": {
+   "question": "词语“同气”是指什么关系",
+   "options": [
+    "兄弟",
+    "姐妹",
+    "夫妻",
+    "朋友"
+   ],
+   "answer": "兄弟",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "词语司空见惯中的司空指的是": {
+   "question": "词语“司空见惯”中的“司空”指的是",
+   "options": [
+    "官职",
+    "人名",
+    "地点",
+    "时间"
+   ],
+   "answer": "官职",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "宫城的正门被称为": {
+   "question": "宫城的正门被称为",
+   "options": [
+    "午门",
+    "黄门",
+    "正门",
+    "帝门"
+   ],
+   "answer": "午门",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "不属于中国四大名园的是": {
+   "question": "不属于中国四大名园的是",
+   "options": [
+    "圆明园",
+    "拙政园 ",
+    "颐和园",
+    "避暑山庄"
+   ],
+   "answer": "圆明园",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "以下不是古代春节习俗的是": {
+   "question": "以下不是古代“春节”习俗的是",
+   "options": [
+    "赏月亮",
+    "贴春联",
+    "舞狮子",
+    "吃饺子"
+   ],
+   "answer": "赏月亮",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "古人常用松鹤延年图祝寿鹤是生长在": {
+   "question": "古人常用松鹤延年图祝寿，鹤是生长在",
+   "options": [
+    "沼泽",
+    "草地",
+    "森林",
+    "海洋"
+   ],
+   "answer": "沼泽",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "仲夏在古代时令中是指农历几月": {
+   "question": "“仲夏”在古代时令中是指农历几月",
+   "options": [
+    "四月",
+    "五月",
+    "六月",
+    "七月"
+   ],
+   "answer": "五月",
+   "category": "古代常识",
+   "official_first_is_answer": false
+  },
+  "四书五经中的五经是指": {
+   "question": "四书五经中的“五经”是指",
+   "options": [
+    "诗、书、礼、易、春秋",
+    "大学、中庸、论语、孟子、六艺",
+    "诗经、周礼、仪礼、礼记、左传",
+    "周礼、诗、书、论语、孟子"
+   ],
+   "answer": "诗、书、礼、易、春秋",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "古代六艺礼乐射御书数中的御是指": {
+   "question": "古代六艺“礼、乐、射、御、书、数”中的御是指",
+   "options": [
+    "驾车",
+    "礼仪",
+    "识字",
+    "计算"
+   ],
+   "answer": "驾车",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "从我国古代的神话传说来看以下与月亮无关的是": {
+   "question": "从我国古代的神话传说来看，以下与月亮无关的是",
+   "options": [
+    "夸父",
+    "兔",
+    "桂树",
+    "蟾蜍"
+   ],
+   "answer": "夸父",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "算盘是古代的计算用具正规的算盘中间用档木把算珠分为两栏上栏每列两珠下栏每列的珠数是": {
+   "question": "“算盘”是古代的计算用具，正规的算盘中间用档木把算珠分为两栏，上栏每列两珠，下栏每列的珠数是",
+   "options": [
+    "五珠",
+    "四珠",
+    "六珠",
+    "三珠"
+   ],
+   "answer": "五珠",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "西厢记脱胎于唐传奇故事": {
+   "question": "《西厢记》脱胎于唐传奇故事",
+   "options": [
+    "《会真记》",
+    "《古镜记》",
+    "《谢小娥》",
+    "《霍小玉》"
+   ],
+   "answer": "《会真记》",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "算盘发明后人们用珠算口诀帮助记忆以下口诀正确的是": {
+   "question": "算盘发明后，人们用珠算口诀帮助记忆，以下口诀“正确”的是",
+   "options": [
+    "五去五进一",
+    "八去一进二",
+    "九上三去五进一",
+    "六上二去五进一"
+   ],
+   "answer": "五去五进一",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "通往帝王陵区的神道上石头动物后面的石人又叫做": {
+   "question": "通往帝王陵区的神道上，石头动物后面的石人又叫做",
+   "options": [
+    "石翁仲",
+    "黄石老人",
+    "石面人",
+    "堆三石"
+   ],
+   "answer": "石翁仲",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "玄英是哪个季节的别称": {
+   "question": "“玄英”是哪个季节的别称",
+   "options": [
+    "冬季",
+    "春季",
+    "夏季",
+    "秋季"
+   ],
+   "answer": "冬季",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "五谷中的菽是指": {
+   "question": "五谷中的“菽”是指",
+   "options": [
+    "大豆",
+    "玉米",
+    "高粱",
+    "棉麻"
+   ],
+   "answer": "大豆",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "胄是古代士兵使用的防护用具用来保护哪个部位": {
+   "question": "“胄”是古代士兵使用的防护用具，用来保护哪个部位",
+   "options": [
+    "头部",
+    "肩部",
+    "前胸",
+    "双臂"
+   ],
+   "answer": "头部",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "铜权是古代常见的金属器物后来被俗称为": {
+   "question": "“铜权”是古代常见的金属器物，后来被俗称为",
+   "options": [
+    "秤砣",
+    "香炉",
+    "铜镜",
+    "酒壶"
+   ],
+   "answer": "秤砣",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "古代军队调兵遣将的信物是": {
+   "question": "古代军队调兵遣将的信物是？",
+   "options": [
+    "虎符",
+    "龙符",
+    "腰牌",
+    "令箭"
+   ],
+   "answer": "虎符",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "月上柳梢头人约黄昏后写的是中国哪个传统节日": {
+   "question": "月上柳梢头，人约黄昏后。写的是中国哪个传统节日？",
+   "options": [
+    "元宵",
+    "春节",
+    "中秋",
+    "除夕"
+   ],
+   "answer": "元宵",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "驿站在元代称做什么": {
+   "question": "“驿站”在元代称做什么？",
+   "options": [
+    "站赤",
+    "驿台",
+    "站亭",
+    "驿亭"
+   ],
+   "answer": "站赤",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "古代小说常用沉鱼落雁闭月羞花形容女性之美其中沉鱼是指": {
+   "question": "古代小说常用“沉鱼落雁，闭月羞花”形容女性之美，其中“沉鱼”是指",
+   "options": [
+    "西施",
+    "杨玉环",
+    "貂蝉",
+    "王昭君"
+   ],
+   "answer": "西施",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "古代成语墨守成规的寓意是": {
+   "question": "古代成语“墨守成规”的寓意是",
+   "options": [
+    "形容固执守旧，不思改革进取",
+    "形容凡事要形成规范",
+    "形容善于守城的能将",
+    "形容十分严苛的制度"
+   ],
+   "answer": "形容固执守旧，不思改革进取",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "古代成语碧落黄泉中的黄泉是指": {
+   "question": "古代成语“碧落黄泉”中的“黄泉”是指",
+   "options": [
+    "地府",
+    "黄河",
+    "浑浊的泉水",
+    "人名"
+   ],
+   "answer": "地府",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "乞巧节指的是农历": {
+   "question": "乞巧节指的是农历",
+   "options": [
+    "七月初七",
+    "二月初二",
+    "九月初九",
+    "五月初五"
+   ],
+   "answer": "七月初七",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "以下不属于五谷的农作物是": {
+   "question": "以下不属于“五谷”的农作物是",
+   "options": [
+    "大蒜",
+    "黍",
+    "稷",
+    "菽"
+   ],
+   "answer": "大蒜",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "奇门遁甲八门中哪一门不属于吉门": {
+   "question": "奇门遁甲“八门”中，哪一门不属于吉门",
+   "options": [
+    "死",
+    "开",
+    "休",
+    "生"
+   ],
+   "answer": "死",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "下列哪个是唐朝高等学府": {
+   "question": "下列哪个是唐朝高等学府",
+   "options": [
+    "国子监",
+    "小学",
+    "中学",
+    "幼儿园"
+   ],
+   "answer": "国子监",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "古代用沉鱼落雁闭月羞花形容女性之美其中闭月是指": {
+   "question": "古代用“沉鱼落雁，闭月羞花”形容女性之美，其中“闭月”是指",
+   "options": [
+    "貂蝉",
+    "西施",
+    "王昭君",
+    "杨玉环"
+   ],
+   "answer": "貂蝉",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "小黄鱼长大之后是不是会变成大黄鱼": {
+   "question": "小黄鱼长大之后是不是会变成大黄鱼？",
+   "options": [
+    "不会",
+    "会",
+    "有可能",
+    "不知道"
+   ],
+   "answer": "不会",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "南宋的都城临安是现今何处": {
+   "question": "南宋的都城临安，是现今何处？",
+   "options": [
+    "杭州",
+    "苏州",
+    "扬州",
+    "江州"
+   ],
+   "answer": "杭州",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "火把节在每年农历的什么时间举行": {
+   "question": "“火把节”在每年农历的什么时间举行？",
+   "options": [
+    "六月二十四日",
+    "五月三十日",
+    "正月初一",
+    "八月十五"
+   ],
+   "answer": "六月二十四日",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "被称为七绝圣手的唐代诗人是": {
+   "question": "被称为“七绝圣手”的唐代诗人是",
+   "options": [
+    "王昌龄",
+    "苏轼",
+    "杜甫",
+    "王维"
+   ],
+   "answer": "王昌龄",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "我国第一位伟大的浪漫主义爱国诗人是": {
+   "question": "我国第一位伟大的浪漫主义爱国诗人是",
+   "options": [
+    "屈原",
+    "宋玉",
+    "曹植",
+    "贾谊"
+   ],
+   "answer": "屈原",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "嫘祖为我们所熟知是因为她": {
+   "question": "嫘祖为我们所熟知，是因为她",
+   "options": [
+    "养蚕制衣",
+    "种植棉花",
+    "发明了织布机",
+    "发明文字"
+   ],
+   "answer": "养蚕制衣",
+   "category": "历史知识",
+   "official_first_is_answer": true
+  },
+  "传说中文字是谁发明的": {
+   "question": "传说中文字是谁发明的",
+   "options": [
+    "仓颉",
+    "黄帝",
+    "神农氏",
+    "伏羲"
+   ],
+   "answer": "仓颉",
+   "category": "历史知识",
+   "official_first_is_answer": true
+  },
+  "洛阳纸贵指的作品是下面哪一部": {
+   "question": "“洛阳纸贵”指的作品是下面哪一部？",
+   "options": [
+    "左思的《三都赋》",
+    "班固的《两都赋》",
+    "张衡的《两京赋》",
+    "司马相如的《子虚赋》"
+   ],
+   "answer": "左思的《三都赋》",
+   "category": "历史知识",
+   "official_first_is_answer": true
+  },
+  "智者乐水后一句是": {
+   "question": "“智者乐水”，后一句是：",
+   "options": [
+    "仁者乐山",
+    "仁者乐安",
+    "仁者乐风",
+    "仁者乐茶"
+   ],
+   "answer": "仁者乐山",
+   "category": "历史知识",
+   "official_first_is_answer": true
+  },
+  "称为两榜出身的是": {
+   "question": "称为两榜出身的是",
+   "options": [
+    "进士",
+    "秀才",
+    "举人",
+    "状元"
+   ],
+   "answer": "进士",
+   "category": "历史知识",
+   "official_first_is_answer": true
+  },
+  "王侯将相宁有种乎这句话出自谁之口": {
+   "question": "“王侯将相，宁有种乎”这句话出自谁之口",
+   "options": [
+    "陈胜、吴广",
+    "张角",
+    "王莽",
+    "樊崇"
+   ],
+   "answer": "陈胜、吴广",
+   "category": "历史知识",
+   "official_first_is_answer": true
+  },
+  "清明寒食是吴王为了纪念哪一个大臣设的规矩": {
+   "question": "“清明寒食”是吴王为了纪念哪一个大臣设的规矩",
+   "options": [
+    "介子推",
+    "诸葛亮",
+    "周武王",
+    "魏征"
+   ],
+   "answer": "介子推",
+   "category": "历史知识",
+   "official_first_is_answer": true
+  },
+  "不为五斗米折腰的古代人物是": {
+   "question": "“不为五斗米折腰”的古代人物是",
+   "options": [
+    "陶渊明",
+    "徐晃",
+    "孔子",
+    "米芾"
+   ],
+   "answer": "陶渊明",
+   "category": "历史知识",
+   "official_first_is_answer": true
+  },
+  "金屋藏娇说的是哪一位皇帝": {
+   "question": "“金屋藏娇”说的是哪一位皇帝",
+   "options": [
+    "刘彻",
+    "刘伯温",
+    "刘备",
+    "刘阿斗"
+   ],
+   "answer": "刘彻",
+   "category": "历史知识",
+   "official_first_is_answer": true
+  },
+  "古代许多诗句中都有折柳二字这是什么情况下的习俗": {
+   "question": "古代许多诗句中都有“折柳”二字，这是什么情况下的习俗",
+   "options": [
+    "送别",
+    "请客",
+    "春游",
+    "劝酒"
+   ],
+   "answer": "送别",
+   "category": "历史知识",
+   "official_first_is_answer": true
+  },
+  "唐代长安城大街上种植的树是": {
+   "question": "唐代长安城大街上种植的树是",
+   "options": [
+    "槐树",
+    "白杨树",
+    "柳树",
+    "松树"
+   ],
+   "answer": "槐树",
+   "category": "历史知识",
+   "official_first_is_answer": true
+  },
+  "最早提出地理名称的书是": {
+   "question": "最早提出“地理”名称的书是",
+   "options": [
+    "《周易》",
+    "《逍遥游》",
+    "《诗经》",
+    "《山海经》"
+   ],
+   "answer": "《周易》",
+   "category": "历史知识",
+   "official_first_is_answer": true
+  },
+  "北宋的两个著名词人晏殊和晏几道是什么关系": {
+   "question": "北宋的两个著名词人晏殊和晏几道是什么关系",
+   "options": [
+    "父子",
+    "叔侄",
+    "朋友",
+    "兄弟"
+   ],
+   "answer": "父子",
+   "category": "历史知识",
+   "official_first_is_answer": true
+  },
+  "古琴的音色有泛音散音和": {
+   "question": "古琴的音色有泛音、散音和",
+   "options": [
+    "按音",
+    "混音",
+    "尾音",
+    "元音"
+   ],
+   "answer": "按音",
+   "category": "历史知识",
+   "official_first_is_answer": true
+  },
+  "宋代大型酒店食店在门前用木枋扎彩楼加种种装饰施朱绿彩画称为": {
+   "question": "宋代大型酒店、食店在门前用木枋扎彩楼，加种种装饰，施朱绿彩画，称为",
+   "options": [
+    "欢门",
+    "彩门",
+    "乐门",
+    "音门"
+   ],
+   "answer": "欢门",
+   "category": "历史知识",
+   "official_first_is_answer": true
+  },
+  "被称为万园之园后被烧毁的建筑是": {
+   "question": "被称为“万园之园”，后被烧毁的建筑是",
+   "options": [
+    "圆明园",
+    "拙政园",
+    "留园",
+    "颐和园"
+   ],
+   "answer": "圆明园",
+   "category": "历史知识",
+   "official_first_is_answer": true
+  },
+  "清代曹雪芹所著的小说红楼梦最初时命名为": {
+   "question": "清代曹雪芹所著的小说《红楼梦》最初时命名为",
+   "options": [
+    "《石头记》",
+    "《贾宝玉和林黛玉的故事》",
+    "《三生石》",
+    "《玉石传奇》"
+   ],
+   "answer": "《石头记》",
+   "category": "历史知识",
+   "official_first_is_answer": true
+  },
+  "康熙和乾隆所题名的七十二景位于哪里": {
+   "question": "康熙和乾隆所题名的“七十二景”位于哪里",
+   "options": [
+    "避暑山庄",
+    "颐和园",
+    "故宫",
+    "拙政圆"
+   ],
+   "answer": "避暑山庄",
+   "category": "历史知识",
+   "official_first_is_answer": true
+  },
+  "以下不是中国四大发明的是": {
+   "question": "以下不是中国四大发明的是",
+   "options": [
+    "中药",
+    "造纸术",
+    "指南针",
+    "火药"
+   ],
+   "answer": "中药",
+   "category": "历史知识",
+   "official_first_is_answer": true
+  },
+  "指南针为什么不叫指北针": {
+   "question": "指南针为什么不叫“指北针”？",
+   "options": [
+    "面南为尊",
+    "随便起的名",
+    "避皇帝的讳",
+    "为了纪念发明的人"
+   ],
+   "answer": "面南为尊",
+   "category": "历史知识",
+   "official_first_is_answer": true
+  },
+  "手绢是由古代的什么演化而来": {
+   "question": "手绢是由古代的什么演化而来？",
+   "options": [
+    "头巾",
+    "围巾",
+    "袜子",
+    "裙子"
+   ],
+   "answer": "头巾",
+   "category": "历史知识",
+   "official_first_is_answer": true
+  },
+  "世界上最早记载哈雷彗星的书是": {
+   "question": "世界上最早记载“哈雷彗星”的书是",
+   "options": [
+    "《春秋》",
+    "《左传》",
+    "《淮南子》",
+    "《史记》"
+   ],
+   "answer": "《春秋》",
+   "category": "历史知识",
+   "official_first_is_answer": true
+  },
+  "西周时期出现的十五国风是指": {
+   "question": "西周时期出现的“十五国风”是指",
+   "options": [
+    "十五种地方民歌",
+    "十五种地方文字",
+    "十五种民族装束",
+    "十五种民族礼仪"
+   ],
+   "answer": "十五种地方民歌",
+   "category": "历史知识",
+   "official_first_is_answer": true
+  },
+  "东汉时期的黄巾起义领导者是": {
+   "question": "东汉时期的“黄巾起义”领导者是",
+   "options": [
+    "张角",
+    "张鲁",
+    "黄巢",
+    "王仙芝"
+   ],
+   "answer": "张角",
+   "category": "历史知识",
+   "official_first_is_answer": true
+  },
+  "祖冲之第一个把圆周率准确推算到小数点后第几位": {
+   "question": "祖冲之第一个把圆周率准确推算到小数点后第几位？",
+   "options": [
+    "第七位",
+    "第五位",
+    "第六位",
+    "第四位"
+   ],
+   "answer": "第七位",
+   "category": "历史知识",
+   "official_first_is_answer": true
+  },
+  "北魏末年贾思勰编写的齐民要术所总结的是": {
+   "question": "北魏末年贾思勰编写的《齐民要术》所总结的是",
+   "options": [
+    "农业生产技术",
+    "治理国家的要领",
+    "百姓的生活现状",
+    "各民族的风俗习惯"
+   ],
+   "answer": "农业生产技术",
+   "category": "历史知识",
+   "official_first_is_answer": true
+  },
+  "清朝入关后的第一位皇帝是": {
+   "question": "清朝入关后的第一位皇帝是",
+   "options": [
+    "顺治",
+    "康熙",
+    "雍正",
+    "嘉庆"
+   ],
+   "answer": "顺治",
+   "category": "历史知识",
+   "official_first_is_answer": true
+  },
+  "太平天国起义的核心领导人中冯云山被封为": {
+   "question": "太平天国起义的核心领导人中，冯云山被封为",
+   "options": [
+    "南王",
+    "东王",
+    "西王",
+    "北王"
+   ],
+   "answer": "南王",
+   "category": "历史知识",
+   "official_first_is_answer": true
+  },
+  "著有徐霞客游记的徐霞客是哪个朝代的人": {
+   "question": "著有《徐霞客游记》的徐霞客是哪个朝代的人",
+   "options": [
+    "明朝",
+    "清朝",
+    "唐朝",
+    "宋朝"
+   ],
+   "answer": "明朝",
+   "category": "历史知识",
+   "official_first_is_answer": true
+  },
+  "著名的棉纺织革新家黄道婆是哪个朝代的人": {
+   "question": "著名的棉纺织革新家黄道婆是哪个朝代的人",
+   "options": [
+    "元朝",
+    "明朝",
+    "清朝",
+    "唐朝"
+   ],
+   "answer": "元朝",
+   "category": "历史知识",
+   "official_first_is_answer": true
+  },
+  "中国古代历法名著授时历的作者是": {
+   "question": "中国古代历法名著《授时历》的作者是",
+   "options": [
+    "郭守敬",
+    "沈括",
+    "张衡",
+    "贾思勰"
+   ],
+   "answer": "郭守敬",
+   "category": "历史知识",
+   "official_first_is_answer": true
+  },
+  "中国哪位皇帝采取了焚书坑儒的政策": {
+   "question": "中国哪位皇帝采取了“焚书坑儒”的政策",
+   "options": [
+    "秦始皇",
+    "汉高祖",
+    "纣王",
+    "李世民"
+   ],
+   "answer": "秦始皇",
+   "category": "历史知识",
+   "official_first_is_answer": true
+  },
+  "在淝水之战中的大败的君主是": {
+   "question": "在“淝水之战”中的大败的君主是",
+   "options": [
+    "苻坚",
+    "苻融",
+    "曹操",
+    "拓拔宏"
+   ],
+   "answer": "苻坚",
+   "category": "历史知识",
+   "official_first_is_answer": true
+  },
+  "四羊方尊是哪个朝代的文物": {
+   "question": "“四羊方尊”是哪个朝代的文物",
+   "options": [
+    "商",
+    "夏",
+    "元",
+    "周"
+   ],
+   "answer": "商",
+   "category": "历史知识",
+   "official_first_is_answer": true
+  },
+  "孝文帝拓拔宏属于以下哪个民族": {
+   "question": "孝文帝拓拔宏属于以下哪个民族",
+   "options": [
+    "鲜卑族",
+    "蒙古族",
+    "藏族",
+    "满族"
+   ],
+   "answer": "鲜卑族",
+   "category": "历史知识",
+   "official_first_is_answer": true
+  },
+  "历史上著名的胡蓝之狱发生在哪个朝代": {
+   "question": "历史上著名的“胡蓝之狱”发生在哪个朝代",
+   "options": [
+    "明",
+    "清",
+    "唐",
+    "宋"
+   ],
+   "answer": "明",
+   "category": "历史知识",
+   "official_first_is_answer": true
+  },
+  "唐太宗李世民在位时年号叫什么": {
+   "question": "唐太宗李世民在位时年号叫什么",
+   "options": [
+    "贞观",
+    "武德",
+    "开元",
+    "天宝"
+   ],
+   "answer": "贞观",
+   "category": "历史知识",
+   "official_first_is_answer": true
+  },
+  "成语鸡鸣狗盗与战国四君子哪位有所关联": {
+   "question": "成语“鸡鸣狗盗”与战国四君子哪位有所关联",
+   "options": [
+    "孟尝君",
+    "平原君",
+    "信陵君",
+    "春申君"
+   ],
+   "answer": "孟尝君",
+   "category": "历史知识",
+   "official_first_is_answer": true
+  },
+  "春秋战国时期的诸子百家不包括": {
+   "question": "春秋战国时期的“诸子百家”不包括",
+   "options": [
+    "佛家",
+    "儒家",
+    "道家",
+    "法家"
+   ],
+   "answer": "佛家",
+   "category": "历史知识",
+   "official_first_is_answer": true
+  },
+  "以下谁不是玄武门之变的参与者": {
+   "question": "以下谁不是“玄武门”之变的参与者",
+   "options": [
+    "李元霸",
+    "李世民",
+    "李建成",
+    "李元吉"
+   ],
+   "answer": "李元霸",
+   "category": "历史知识",
+   "official_first_is_answer": true
+  },
+  "是哪位君主采纳罢黜百家独尊儒术的建议": {
+   "question": "是哪位君主采纳“罢黜百家，独尊儒术”的建议",
+   "options": [
+    "汉武帝",
+    "董仲舒",
+    "汉景帝",
+    "汉文帝"
+   ],
+   "answer": "汉武帝",
+   "category": "历史知识",
+   "official_first_is_answer": true
+  },
+  "著名历史事件玄武门之变中最终的赢家是谁": {
+   "question": "著名历史事件“玄武门之变”中，最终的赢家是谁？",
+   "options": [
+    "李世民",
+    "李建成",
+    "李元吉",
+    "李元霸"
+   ],
+   "answer": "李世民",
+   "category": "历史知识",
+   "official_first_is_answer": true
+  },
+  "唐太宗精擅书法经常以什么字体写碑": {
+   "question": "唐太宗精擅书法，经常以什么字体写碑",
+   "options": [
+    "行书",
+    "草书",
+    "隶书",
+    "楷书"
+   ],
+   "answer": "行书",
+   "category": "历史知识",
+   "official_first_is_answer": true
+  },
+  "古有三省六部制下列哪个不是三省之一": {
+   "question": "古有“三省六部制”，下列哪个不是三省之一？",
+   "options": [
+    "政事省",
+    "中书省",
+    "门下省",
+    "尚书省"
+   ],
+   "answer": "政事省",
+   "category": "历史知识",
+   "official_first_is_answer": true
+  },
+  "金刚经是哪个教派的著作": {
+   "question": "《金刚经》是哪个教派的著作？",
+   "options": [
+    "佛教",
+    "道教",
+    "基督教",
+    "伊斯兰教"
+   ],
+   "answer": "佛教",
+   "category": "佛道礼仪",
+   "official_first_is_answer": true
+  },
+  "哪里被称做千佛洞": {
+   "question": "哪里被称做“千佛洞”？",
+   "options": [
+    "敦煌莫高窟",
+    "五台山",
+    "小西天",
+    "灵台山"
+   ],
+   "answer": "敦煌莫高窟",
+   "category": "佛道礼仪",
+   "official_first_is_answer": true
+  },
+  "笄礼是古代女子几岁成年的插笄仪式": {
+   "question": "笄礼是古代女子几岁成年的插笄仪式？",
+   "options": [
+    "15",
+    "10",
+    "12",
+    "20"
+   ],
+   "answer": "15",
+   "category": "佛道礼仪",
+   "official_first_is_answer": true
+  },
+  "鸿胪寺最初用来做什么": {
+   "question": "鸿胪寺最初用来做什么？",
+   "options": [
+    "接待外宾",
+    "科举",
+    "比武",
+    "避暑园林"
+   ],
+   "answer": "接待外宾",
+   "category": "佛道礼仪",
+   "official_first_is_answer": true
+  },
+  "唐朝时六渡日本宣扬佛教为当时两国邦交做出重大贡献的是": {
+   "question": "唐朝时六渡日本宣扬佛教为当时两国邦交做出重大贡献的是",
+   "options": [
+    "鉴真",
+    "玄奘",
+    "郑和",
+    "王昭君"
+   ],
+   "answer": "鉴真",
+   "category": "佛道礼仪",
+   "official_first_is_answer": true
+  },
+  "白马寺在哪个地区": {
+   "question": "白马寺在哪个地区",
+   "options": [
+    "河南",
+    "山东",
+    "西安",
+    "湖北"
+   ],
+   "answer": "河南",
+   "category": "佛道礼仪",
+   "official_first_is_answer": true
+  },
+  "名不正则言不顺是哪家的思想": {
+   "question": "“名不正则言不顺”是哪家的思想？",
+   "options": [
+    "儒家",
+    "墨家",
+    "法家",
+    "道家"
+   ],
+   "answer": "儒家",
+   "category": "佛道礼仪",
+   "official_first_is_answer": true
+  },
+  "古代敦煌艺术源于中国哪个教派": {
+   "question": "古代“敦煌艺术”源于中国哪个教派",
+   "options": [
+    "佛教",
+    "道教",
+    "儒教",
+    "伊斯兰教"
+   ],
+   "answer": "佛教",
+   "category": "佛道礼仪",
+   "official_first_is_answer": true
+  },
+  "我国最早的佛寺是": {
+   "question": "我国最早的佛寺是",
+   "options": [
+    "白马寺",
+    "文殊院",
+    "契迪龙寺",
+    "帕辛寺"
+   ],
+   "answer": "白马寺",
+   "category": "佛道礼仪",
+   "official_first_is_answer": true
+  },
+  "以下不是古代祭祀常用牲畜的是": {
+   "question": "以下不是古代祭祀常用牲畜的是",
+   "options": [
+    "兔",
+    "牛",
+    "羊",
+    "猪"
+   ],
+   "answer": "兔",
+   "category": "佛道礼仪",
+   "official_first_is_answer": true
+  },
+  "以下不是古代祭祀准备活动的是": {
+   "question": "以下不是古代“祭祀”准备活动的是",
+   "options": [
+    "赏灯",
+    "沐浴",
+    "斋戒",
+    "更衣"
+   ],
+   "answer": "赏灯",
+   "category": "佛道礼仪",
+   "official_first_is_answer": true
+  },
+  "佛教所称圆寂是指": {
+   "question": "佛教所称“圆寂”是指",
+   "options": [
+    "佛门中人去世",
+    "斋戒沐浴",
+    "面壁思过",
+    "作法事"
+   ],
+   "answer": "佛门中人去世",
+   "category": "佛道礼仪",
+   "official_first_is_answer": true
+  },
+  "古代所称先考是一种尊敬的称法指的是": {
+   "question": "古代所称“先考”是一种尊敬的称法，指的是",
+   "options": [
+    "已逝世的父亲",
+    "已逝世的母亲",
+    "已逝世恩师",
+    "已逝世的兄长"
+   ],
+   "answer": "已逝世的父亲",
+   "category": "佛道礼仪",
+   "official_first_is_answer": true
+  },
+  "甲的儿媳与乙的母亲是妯娌乙应该称呼甲为": {
+   "question": "甲的儿媳与乙的母亲是妯娌，乙应该称呼甲为",
+   "options": [
+    "祖父/祖母",
+    "外公/外婆",
+    "舅父/舅母",
+    "太祖父/太祖母"
+   ],
+   "answer": "祖父/祖母",
+   "category": "佛道礼仪",
+   "official_first_is_answer": true
+  },
+  "甲与乙是连襟则甲的女儿称乙的岳丈为": {
+   "question": "甲与乙是连襟，则甲的女儿称乙的岳丈为",
+   "options": [
+    "外公",
+    "舅老爷",
+    "太叔公",
+    "太祖父"
+   ],
+   "answer": "外公",
+   "category": "佛道礼仪",
+   "official_first_is_answer": true
+  },
+  "以下与自己辈分相同的亲属是": {
+   "question": "以下与自己“辈分相同”的亲属是",
+   "options": [
+    "姨夫的弟媳的外甥",
+    "表妹的舅母的堂弟",
+    "姑妈的大伯的侄女",
+    "舅舅的嫂子的表哥"
+   ],
+   "answer": "姨夫的弟媳的外甥",
+   "category": "佛道礼仪",
+   "official_first_is_answer": true
+  },
+  "古时人称情谊契合亲如兄弟的朋友为": {
+   "question": "古时人称“情谊契合、亲如兄弟”的朋友为",
+   "options": [
+    "金兰之交",
+    "刎颈之交",
+    "患难之交",
+    "莫逆之交"
+   ],
+   "answer": "金兰之交",
+   "category": "佛道礼仪",
+   "official_first_is_answer": true
+  },
+  "佛门中主持水陆法会需要几天时间": {
+   "question": "佛门中主持“水陆法会”需要几天时间”",
+   "options": [
+    "7天",
+    "3天",
+    "5天",
+    "10天"
+   ],
+   "answer": "7天",
+   "category": "佛道礼仪",
+   "official_first_is_answer": true
+  },
+  "皈依三宝是成为正信佛教徒的第一课其中三宝是指": {
+   "question": "“皈依三宝”是成为正信佛教徒的第一课，其中三宝是指",
+   "options": [
+    "佛、法、僧",
+    "金银、珍珠、玛瑙",
+    "同修、同解、同悦",
+    "尊敬、福德、善人"
+   ],
+   "answer": "佛、法、僧",
+   "category": "佛道礼仪",
+   "official_first_is_answer": true
+  },
+  "佛门戒律中三聚净戒是指": {
+   "question": "佛门戒律中“三聚净戒”是指？",
+   "options": [
+    "菩萨戒",
+    "佛陀戒",
+    "僧伽戒",
+    "达摩戒"
+   ],
+   "answer": "菩萨戒",
+   "category": "佛道礼仪",
+   "official_first_is_answer": true
+  },
+  "甲的嫂子是乙的姑姑则以下两人属于亲家关系的是": {
+   "question": "甲的嫂子是乙的姑姑，则以下两人属于“亲家”关系的是",
+   "options": [
+    "甲的父亲与乙的祖母",
+    "甲与乙的父亲",
+    "甲的母亲与乙的姑父",
+    "甲与乙的叔父"
+   ],
+   "answer": "甲的父亲与乙的祖母",
+   "category": "佛道礼仪",
+   "official_first_is_answer": true
+  },
+  "拜佛时香客送上的香火钱香油钱是用来": {
+   "question": "拜佛时香客送上的“香火钱、香油钱”是用来",
+   "options": [
+    "捐赠给寺庙",
+    "购买灯油",
+    "作为拜师费用",
+    "请和尚颂经"
+   ],
+   "answer": "捐赠给寺庙",
+   "category": "佛道礼仪",
+   "official_first_is_answer": true
+  },
+  "在寺庙里总管各项事务的一位僧人称为": {
+   "question": "在寺庙里总管各项事务的一位僧人称为",
+   "options": [
+    "主持方丈",
+    "方丈总管",
+    "护法禅师",
+    "护法长老"
+   ],
+   "answer": "主持方丈",
+   "category": "佛道礼仪",
+   "official_first_is_answer": true
+  },
+  "五台山是中国佛教四大名山之一它位于哪个省": {
+   "question": "“五台山”是中国佛教四大名山之一，它位于哪个省",
+   "options": [
+    "四川",
+    "浙江",
+    "山西",
+    "安徽"
+   ],
+   "answer": "山西",
+   "category": "佛道礼仪",
+   "official_first_is_answer": false
+  },
+  "佛教中人所用的钵是一种": {
+   "question": "佛教中人所用的“钵”是一种",
+   "options": [
+    "餐具",
+    "乐器",
+    "装饰品",
+    "茶具"
+   ],
+   "answer": "餐具",
+   "category": "佛道礼仪",
+   "official_first_is_answer": true
+  },
+  "救人一命胜造七级浮屠这里浮屠指的是": {
+   "question": "“救人一命，胜造七级浮屠”这里浮屠指的是",
+   "options": [
+    "宝塔",
+    "宝剑",
+    "宝石",
+    "宝珠"
+   ],
+   "answer": "宝塔",
+   "category": "佛道礼仪",
+   "official_first_is_answer": true
+  },
+  "佛教起源于何地": {
+   "question": "佛教起源于何地",
+   "options": [
+    "古印度（天竺）",
+    "古波斯（大食国）",
+    "古罗马",
+    "古希腊"
+   ],
+   "answer": "古印度（天竺）",
+   "category": "佛道礼仪",
+   "official_first_is_answer": true
+  },
+  "心无挂碍无挂碍故无有恐怖远离颠倒梦想出自": {
+   "question": "“心无挂碍，无挂碍故，无有恐怖，远离颠倒梦想”出自",
+   "options": [
+    "《般若波罗蜜多心经》",
+    "《金刚经》",
+    "《大藏经》",
+    "《大悲咒》"
+   ],
+   "answer": "《般若波罗蜜多心经》",
+   "category": "佛道礼仪",
+   "official_first_is_answer": true
+  },
+  "佛家三宝是指": {
+   "question": "“佛家三宝”是指",
+   "options": [
+    "佛、法、僧",
+    "舍利子、菩提树、佛尘",
+    "禅杖、袈裟、经书",
+    "宝莲灯、木鱼、长明灯"
+   ],
+   "answer": "佛、法、僧",
+   "category": "佛道礼仪",
+   "official_first_is_answer": true
+  },
+  "济公在哪座寺庙出家": {
+   "question": "济公在哪座寺庙出家",
+   "options": [
+    "灵隐寺",
+    "寒山寺",
+    "鸡鸣寺",
+    "普陀寺"
+   ],
+   "answer": "灵隐寺",
+   "category": "佛道礼仪",
+   "official_first_is_answer": true
+  },
+  "以下不属于佛教四谛教义的是": {
+   "question": "以下不属于佛教“四谛”教义的是",
+   "options": [
+    "空",
+    "苦",
+    "集",
+    "灭"
+   ],
+   "answer": "空",
+   "category": "佛道礼仪",
+   "official_first_is_answer": true
+  },
+  "佛教八识中的第八识是": {
+   "question": "佛教“八识”中的第八识是",
+   "options": [
+    "阿赖耶识",
+    "末那识",
+    "身识",
+    "意识"
+   ],
+   "answer": "阿赖耶识",
+   "category": "佛道礼仪",
+   "official_first_is_answer": true
+  },
+  "以下不属于道教四大天师的是": {
+   "question": "以下不属于道教“四大天师”的是",
+   "options": [
+    "萨镇冰",
+    "张道陵",
+    "葛玄",
+    "许逊"
+   ],
+   "answer": "萨镇冰",
+   "category": "佛道礼仪",
+   "official_first_is_answer": true
+  },
+  "以下不属于佛教横三世佛的是": {
+   "question": "以下不属于佛教“横三世佛”的是",
+   "options": [
+    "弥勒佛",
+    "药师佛",
+    "释迦牟尼佛",
+    "阿弥陀佛"
+   ],
+   "answer": "弥勒佛",
+   "category": "佛道礼仪",
+   "official_first_is_answer": true
+  },
+  "有漏皆苦的漏是什么意思": {
+   "question": "有漏皆苦”的“漏”是什么意思？",
+   "options": [
+    "烦恼",
+    "贪婪",
+    "痛苦",
+    "欲望"
+   ],
+   "answer": "烦恼",
+   "category": "佛道礼仪",
+   "official_first_is_answer": true
+  },
+  "佛经是释迦牟尼亲自写的吗": {
+   "question": "佛经是释迦牟尼亲自写的吗?",
+   "options": [
+    "不是，是弟子记录的",
+    "是",
+    "不知道",
+    "部分是"
+   ],
+   "answer": "不是，是弟子记录的",
+   "category": "佛道礼仪",
+   "official_first_is_answer": true
+  },
+  "下列不属于佛教六道轮回的是": {
+   "question": "下列不属于佛教“六道轮回”的是",
+   "options": [
+    "非常道",
+    "人道",
+    "阿修罗道",
+    "畜生道"
+   ],
+   "answer": "非常道",
+   "category": "佛道礼仪",
+   "official_first_is_answer": true
+  },
+  "京剧的旦行中穿短裳的是": {
+   "question": "京剧的旦行中穿短裳的是",
+   "options": [
+    "花旦",
+    "老旦",
+    "老生",
+    "丑旦"
+   ],
+   "answer": "花旦",
+   "category": "音律棋牌",
+   "official_first_is_answer": true
+  },
+  "中国戏曲中的人物角色可分为生旦净末丑哪一个是女角色的统称": {
+   "question": "中国戏曲中的人物角色可分为生、旦、净、末、丑，哪一个是女角色的统称",
+   "options": [
+    "旦",
+    "生",
+    "丑",
+    "末"
+   ],
+   "answer": "旦",
+   "category": "音律棋牌",
+   "official_first_is_answer": true
+  },
+  "苏州评弹是哪两种表演形式的统称": {
+   "question": "苏州评弹是哪两种表演形式的统称",
+   "options": [
+    "评话和弹词",
+    "评书和弹扬琴",
+    "评书和弹筝",
+    "评话和弹筝"
+   ],
+   "answer": "评话和弹词",
+   "category": "音律棋牌",
+   "official_first_is_answer": true
+  },
+  "进行京剧表演的戏院在清朝最早叫": {
+   "question": "进行京剧表演的戏院，在清朝最早叫",
+   "options": [
+    "茶园",
+    "曲苑",
+    "艺坛",
+    "寮门"
+   ],
+   "answer": "茶园",
+   "category": "音律棋牌",
+   "official_first_is_answer": true
+  },
+  "在象棋走法里一方走当头炮另一方也将同一线上的炮放在当头这在象棋术语里称为": {
+   "question": "在象棋走法里，一方走当头炮，另一方也将同一线上的炮放在当头，这在象棋术语里称为",
+   "options": [
+    "顺手炮",
+    "二头炮",
+    "重炮",
+    "连环炮"
+   ],
+   "answer": "顺手炮",
+   "category": "音律棋牌",
+   "official_first_is_answer": true
+  },
+  "象棋术语里的老兵指的是": {
+   "question": "象棋术语里的“老兵”指的是",
+   "options": [
+    "走到底线的兵",
+    "坚持到终局的兵",
+    "吃过多个子的兵",
+    "把对方将死的兵"
+   ],
+   "answer": "走到底线的兵",
+   "category": "音律棋牌",
+   "official_first_is_answer": true
+  },
+  "象棋术语里的炮打二怪所说的二怪是指": {
+   "question": "象棋术语里的“炮打二怪”所说的二怪是指",
+   "options": [
+    "两个车",
+    "两个马",
+    "车马炮任意两个",
+    "两个炮"
+   ],
+   "answer": "两个车",
+   "category": "音律棋牌",
+   "official_first_is_answer": true
+  },
+  "象棋的棋盘中间有一条没有方格的地带称为": {
+   "question": "象棋的棋盘中间有一条没有方格的地带，称为",
+   "options": [
+    "楚河汉界",
+    "前线",
+    "中场",
+    "底线"
+   ],
+   "answer": "楚河汉界",
+   "category": "音律棋牌",
+   "official_first_is_answer": true
+  },
+  "在围棋的棋盘上标有九个小圆点这几个圆点称作": {
+   "question": "在围棋的棋盘上标有九个小圆点，这几个圆点称作",
+   "options": [
+    "星",
+    "心",
+    "点",
+    "圆"
+   ],
+   "answer": "星",
+   "category": "音律棋牌",
+   "official_first_is_answer": true
+  },
+  "在围棋的棋盘上标有九个小圆点其中最中间的一个称为": {
+   "question": "在围棋的棋盘上标有九个小圆点，其中最中间的一个称为",
+   "options": [
+    "天元",
+    "中点",
+    "金点",
+    "圆心"
+   ],
+   "answer": "天元",
+   "category": "音律棋牌",
+   "official_first_is_answer": true
+  },
+  "古代流传的名曲十面埋伏主要由哪种乐器演奏": {
+   "question": "古代流传的名曲“十面埋伏”主要由哪种乐器演奏？",
+   "options": [
+    "琵琶",
+    "木鱼",
+    "古筝",
+    "笛子"
+   ],
+   "answer": "琵琶",
+   "category": "音律棋牌",
+   "official_first_is_answer": true
+  },
+  "象棋第一步走炮至中线俗称当头炮这步棋的走法叫作": {
+   "question": "象棋第一步走“炮”至中线，俗称“当头炮”，这步棋的走法叫作",
+   "options": [
+    "炮二平五",
+    "炮三平四",
+    "炮二平四",
+    "炮三平五"
+   ],
+   "answer": "炮二平五",
+   "category": "音律棋牌",
+   "official_first_is_answer": true
+  },
+  "以下属于围棋术语的是": {
+   "question": "以下属于围棋术语的是",
+   "options": [
+    "三连星",
+    "三连斩",
+    "三连和 ",
+    "三连挂"
+   ],
+   "answer": "三连星",
+   "category": "音律棋牌",
+   "official_first_is_answer": true
+  },
+  "下列古代乐器中属于少数民族乐器的是": {
+   "question": "下列古代乐器中，属于少数民族乐器的是",
+   "options": [
+    "马头琴",
+    "笛子",
+    "古筝",
+    "编钟"
+   ],
+   "answer": "马头琴",
+   "category": "音律棋牌",
+   "official_first_is_answer": true
+  },
+  "有板有眼的板是我国传统音乐节奏中的": {
+   "question": "“有板有眼”的“板”是我国传统音乐节奏中的",
+   "options": [
+    "强拍",
+    "弱拍",
+    "鼓点",
+    "空段"
+   ],
+   "answer": "强拍",
+   "category": "音律棋牌",
+   "official_first_is_answer": true
+  },
+  "大珠小珠落玉盘所形容的是哪种乐器的演奏": {
+   "question": "“大珠小珠落玉盘”所形容的是哪种乐器的演奏",
+   "options": [
+    "琵琶",
+    "古筝",
+    "扬琴",
+    "笛子"
+   ],
+   "answer": "琵琶",
+   "category": "音律棋牌",
+   "official_first_is_answer": true
+  },
+  "山西洪洞县的明代监狱因谁的故事而著名": {
+   "question": "山西洪洞县的明代监狱，因谁的故事而著名",
+   "options": [
+    "苏三",
+    "柳毅",
+    "窦娥",
+    "杨乃武"
+   ],
+   "answer": "苏三",
+   "category": "音律棋牌",
+   "official_first_is_answer": true
+  },
+  "以下乐器与琵琶在演奏方式上属于同一类的是": {
+   "question": "以下乐器与“琵琶”在演奏方式上属于同一类的是",
+   "options": [
+    "筝",
+    "箫",
+    "竽",
+    "锣"
+   ],
+   "answer": "筝",
+   "category": "音律棋牌",
+   "official_first_is_answer": true
+  },
+  "以下中国古代乐器按常见大小计算最小的是": {
+   "question": "以下中国古代乐器，按常见大小计算，最小的是",
+   "options": [
+    "编钟",
+    "木鱼",
+    "古筝",
+    "柳琴"
+   ],
+   "answer": "木鱼",
+   "category": "音律棋牌",
+   "official_first_is_answer": false
+  },
+  "一般古琴的琴面为": {
+   "question": "一般古琴的琴面为",
+   "options": [
+    "桐木",
+    "柳木",
+    "黄杨木",
+    "槐木"
+   ],
+   "answer": "桐木",
+   "category": "音律棋牌",
+   "official_first_is_answer": true
+  },
+  "二胡是民间常见的拉弦乐器它的琴弦数目是": {
+   "question": "“二胡”是民间常见的拉弦乐器，它的琴弦数目是",
+   "options": [
+    "两根",
+    "一根",
+    "三根",
+    "五根"
+   ],
+   "answer": "两根",
+   "category": "音律棋牌",
+   "official_first_is_answer": true
+  },
+  "古琴琴面镶嵌的十三个螺钿的圆点叫": {
+   "question": "古琴琴面镶嵌的十三个螺钿的圆点叫",
+   "options": [
+    "徽",
+    "钿",
+    "螺"
+   ],
+   "answer": "徽",
+   "category": "音律棋牌",
+   "official_first_is_answer": true
+  },
+  "琵琶顶部的弦轴作用是": {
+   "question": "琵琶顶部的“弦轴”作用是",
+   "options": [
+    "调节音高",
+    "便于携带",
+    "调节颤音",
+    "增加共鸣"
+   ],
+   "answer": "调节音高",
+   "category": "音律棋牌",
+   "official_first_is_answer": true
+  },
+  "以下象棋的棋子中不能走直线的是": {
+   "question": "以下象棋的棋子中不能走直线的是",
+   "options": [
+    "象",
+    "炮",
+    "兵",
+    "将"
+   ],
+   "answer": "象",
+   "category": "音律棋牌",
+   "official_first_is_answer": true
+  },
+  "以下哪种乐器是龟兹乐器": {
+   "question": "以下哪种乐器是龟兹乐器",
+   "options": [
+    "羯鼓",
+    "水鼓",
+    "凤阳鼓",
+    "竹鼓"
+   ],
+   "answer": "羯鼓",
+   "category": "音律棋牌",
+   "official_first_is_answer": true
+  },
+  "中国象棋中有一种布局叫反宫马它的别称是": {
+   "question": "中国象棋中有一种布局叫“反宫马”，它的别称是",
+   "options": [
+    "夹炮屏风",
+    "拐子马",
+    "穿宫马",
+    "单提马"
+   ],
+   "answer": "夹炮屏风",
+   "category": "音律棋牌",
+   "official_first_is_answer": true
+  },
+  "俞伯牙摔琴谢知音摔的是什么乐器": {
+   "question": "“俞伯牙摔琴谢知音”摔的是什么乐器",
+   "options": [
+    "瑶琴",
+    "古筝",
+    "琵琶",
+    "二胡"
+   ],
+   "answer": "瑶琴",
+   "category": "音律棋牌",
+   "official_first_is_answer": true
+  },
+  "项庄舞剑打象棋术语": {
+   "question": "项庄舞剑——打象棋术语",
+   "options": [
+    "暗伏杀机",
+    "象棋残局",
+    "两面照",
+    "铁门闩"
+   ],
+   "answer": "暗伏杀机",
+   "category": "音律棋牌",
+   "official_first_is_answer": true
+  },
+  "以下属于中国古乐基本音阶是": {
+   "question": "以下属于中国古乐基本音阶是",
+   "options": [
+    "徵",
+    "哆",
+    "咪",
+    "索"
+   ],
+   "answer": "徵",
+   "category": "音律棋牌",
+   "official_first_is_answer": true
+  },
+  "以下属于由嵇康创作被称为嵇氏四弄的琴曲是": {
+   "question": "以下属于由嵇康创作，被称为“嵇氏四弄”的琴曲是",
+   "options": [
+    "长清",
+    "广陵散",
+    "阳关三叠",
+    "高山流水"
+   ],
+   "answer": "长清",
+   "category": "音律棋牌",
+   "official_first_is_answer": true
+  },
+  "一般情况下正规的围棋棋盘由纵横多少条线构成": {
+   "question": "一般情况下，正规的围棋棋盘由纵横多少条线构成",
+   "options": [
+    "19",
+    "9",
+    "21",
+    "18"
+   ],
+   "answer": "19",
+   "category": "音律棋牌",
+   "official_first_is_answer": true
+  },
+  "围棋术语中提子指的是": {
+   "question": "围棋术语中，“提子”指的是",
+   "options": [
+    "把无气之子取出盘外",
+    "对局双方各执一色棋子",
+    "棋子下在棋盘的点上",
+    "对一方的活棋进行计数"
+   ],
+   "answer": "把无气之子取出盘外",
+   "category": "音律棋牌",
+   "official_first_is_answer": true
+  },
+  "围棋棋盘上一共有多少个交叉点": {
+   "question": "围棋棋盘上一共有多少个交叉点",
+   "options": [
+    "361",
+    "360",
+    "365",
+    "366"
+   ],
+   "answer": "361",
+   "category": "音律棋牌",
+   "official_first_is_answer": true
+  },
+  "敕勒歌是哪个民族的民歌": {
+   "question": "敕勒歌是哪个民族的民歌？",
+   "options": [
+    "鲜卑族",
+    "汉族",
+    "水族",
+    "白族"
+   ],
+   "answer": "鲜卑族",
+   "category": "音律棋牌",
+   "official_first_is_answer": true
+  },
+  "大多数古琴有多少根弦": {
+   "question": "大多数古琴有多少根弦？",
+   "options": [
+    "7根",
+    "8根",
+    "9根",
+    "10根"
+   ],
+   "answer": "7根",
+   "category": "音律棋牌",
+   "official_first_is_answer": true
+  },
+  "下面哪一支曲是唐代法曲的典范作品": {
+   "question": "下面哪一支曲是唐代法曲的典范作品？",
+   "options": [
+    "《霓裳羽衣曲》",
+    "《十面埋伏》",
+    "《梅花三弄》",
+    "《二泉映月》"
+   ],
+   "answer": "《霓裳羽衣曲》",
+   "category": "音律棋牌",
+   "official_first_is_answer": true
+  },
+  "黄钟大吕的意思是": {
+   "question": "“黄钟”、“大吕”的意思是",
+   "options": [
+    "古音律名",
+    "乐器",
+    "竹管",
+    "纸膜"
+   ],
+   "answer": "古音律名",
+   "category": "音律棋牌",
+   "official_first_is_answer": true
+  },
+  "江南逢李龟年李龟年是唐朝的": {
+   "question": "“江南逢李龟年”，李龟年是唐朝的",
+   "options": [
+    "乐师",
+    "诗人",
+    "舞蹈家",
+    "侠客"
+   ],
+   "answer": "乐师",
+   "category": "音律棋牌",
+   "official_first_is_answer": true
+  },
+  "象脚鼓是哪个民族的打击乐器": {
+   "question": "象脚鼓是哪个民族的打击乐器？",
+   "options": [
+    "傣族",
+    "佤族",
+    "白族",
+    "汉族"
+   ],
+   "answer": "傣族",
+   "category": "音律棋牌",
+   "official_first_is_answer": true
+  },
+  "藕是莲的": {
+   "question": "“藕”是莲的",
+   "options": [
+    "茎",
+    "根",
+    "叶",
+    "花"
+   ],
+   "answer": "茎",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "茶叶依发酵程度不同分为绿茶乌龙茶和": {
+   "question": "茶叶依发酵程度不同分为绿茶、乌龙茶和",
+   "options": [
+    "红茶",
+    "花茶",
+    "黑茶",
+    "苦茶"
+   ],
+   "answer": "红茶",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "普洱茶的产地在": {
+   "question": "普洱茶的产地在",
+   "options": [
+    "云南",
+    "四川",
+    "浙江",
+    "甘肃"
+   ],
+   "answer": "云南",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "下面哪类不是绿茶": {
+   "question": "下面哪类不是绿茶",
+   "options": [
+    "铁观音",
+    "龙井",
+    "碧螺春",
+    "珠茶"
+   ],
+   "answer": "铁观音",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "茶居的居原意是": {
+   "question": "“茶居”的“居”原意是",
+   "options": [
+    "隐",
+    "住",
+    "泡",
+    "售"
+   ],
+   "answer": "隐",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "茅台酒以什么原料制成": {
+   "question": "茅台酒以什么原料制成",
+   "options": [
+    "高粱",
+    "稻谷",
+    "葡萄",
+    "大豆"
+   ],
+   "answer": "高粱",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "黄酒名品加饭酒的产地在": {
+   "question": "黄酒名品“加饭酒”的产地在",
+   "options": [
+    "浙江",
+    "湖南",
+    "河南",
+    "山东"
+   ],
+   "answer": "浙江",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "药酒是在哪个朝代之后出现的": {
+   "question": "药酒是在哪个朝代之后出现的",
+   "options": [
+    "唐朝",
+    "元朝",
+    "明朝",
+    "南北朝"
+   ],
+   "answer": "唐朝",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "下列哪个不属于治疗砒霜中毒的急救药物": {
+   "question": "下列哪个不属于治疗砒霜中毒的急救药物",
+   "options": [
+    "草木灰",
+    "米醋",
+    "乌桕根",
+    "绿豆汁"
+   ],
+   "answer": "草木灰",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "后代医家奉之为脉学之宗的人是": {
+   "question": "后代医家奉之为“脉学之宗”的人是",
+   "options": [
+    "扁鹊",
+    "华佗",
+    "孙思邈",
+    "李时珍"
+   ],
+   "answer": "扁鹊",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "古代将中草药按药性分为四气指的是": {
+   "question": "古代将中草药按药性分为“四气”，指的是",
+   "options": [
+    "寒热温凉",
+    "寒热温湿",
+    "寒温湿凉",
+    "热温湿凉"
+   ],
+   "answer": "寒热温凉",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "中国第一部完整的药物学著作是": {
+   "question": "中国第一部完整的药物学著作是",
+   "options": [
+    "《神农本草经》",
+    "《黄帝内经》",
+    "《医方经》",
+    "《千金方》"
+   ],
+   "answer": "《神农本草经》",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "以下著作中出自孙思邈之手的是": {
+   "question": "以下著作中，出自孙思邈之手的是",
+   "options": [
+    "《千金方》",
+    "《四部医典》",
+    "《黄帝内经》",
+    "《医方经》"
+   ],
+   "answer": "《千金方》",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "世界上最早由国家颁布的药典是": {
+   "question": "世界上最早由国家颁布的药典是",
+   "options": [
+    "《唐本草》",
+    "《四部医典》",
+    "《黄帝内经》",
+    "《医方经》"
+   ],
+   "answer": "《唐本草》",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "下列哪种中药对眼睛有好处": {
+   "question": "下列哪种中药对眼睛有好处",
+   "options": [
+    "决明子",
+    "藏红花",
+    "当归",
+    "冬虫夏草"
+   ],
+   "answer": "决明子",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "以下不属于中草药的是": {
+   "question": "以下“不属于”中草药的是",
+   "options": [
+    "砌末",
+    "牛膝",
+    "山楂",
+    "半夏"
+   ],
+   "answer": "砌末",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "以下中药里除了治病外还有驱蚊功效的是": {
+   "question": "以下中药里，除了治病外，还有驱蚊功效的是",
+   "options": [
+    "艾蒿",
+    "犀牛角",
+    "壁虎",
+    "朱砂"
+   ],
+   "answer": "艾蒿",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "茶马古道是古代著名的贸易通道它主要促进了哪些地域的贸易往来": {
+   "question": "“茶马古道”是古代著名的贸易通道，它主要促进了哪些地域的贸易往来",
+   "options": [
+    "西藏云南四川",
+    "河南山东河北",
+    "内蒙西藏新疆",
+    "甘肃青海陕西"
+   ],
+   "answer": "西藏云南四川",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "中国十大名茶之一的龙井茶原产地在哪个省": {
+   "question": "中国十大名茶之一的“龙井茶”原产地在哪个省",
+   "options": [
+    "浙江",
+    "湖南",
+    "广东",
+    "江西"
+   ],
+   "answer": "浙江",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "江西庐山北临长江南傍鄱阳湖气候温和这里盛产的名茶是": {
+   "question": "江西庐山北临长江，南傍鄱阳湖，气候温和，这里盛产的名茶是",
+   "options": [
+    "云雾茶",
+    "碧螺春",
+    "铁观音",
+    "普洱茶"
+   ],
+   "answer": "云雾茶",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "中国十大名茶之一的白毫银针原产地在哪个省": {
+   "question": "中国十大名茶之一的“白毫银针”原产地在哪个省",
+   "options": [
+    "福建",
+    "浙江",
+    "湖南",
+    "安徽"
+   ],
+   "answer": "福建",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "安徽黄山所产的名茶众多其中最为有名的是": {
+   "question": "安徽黄山所产的名茶众多，其中最为有名的是",
+   "options": [
+    "毛峰",
+    "云雾",
+    "白毫银针",
+    "碧螺春"
+   ],
+   "answer": "毛峰",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "中国十大名茶之一的碧螺春原产地在哪里": {
+   "question": "中国十大名茶之一的“碧螺春”原产地在哪里",
+   "options": [
+    "江苏苏州",
+    "浙江杭州",
+    "安徽黄山",
+    "福建武夷山"
+   ],
+   "answer": "江苏苏州",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "世界上产茶饮茶最早的国家是": {
+   "question": "世界上产茶、饮茶最早的国家是",
+   "options": [
+    "中国",
+    "巴布亚新几内亚",
+    "朝鲜",
+    "埃及"
+   ],
+   "answer": "中国",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "绿茶白茶青茶红茶是以什么为依据来划分的": {
+   "question": "绿茶、白茶、青茶、红茶是以什么为依据来划分的",
+   "options": [
+    "茶叶的发酵程度",
+    "茶叶的天生颜色",
+    "煮茶的时间长短",
+    "泡茶的浓度"
+   ],
+   "answer": "茶叶的发酵程度",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "碧螺春属于以下哪类茶": {
+   "question": "“碧螺春”属于以下哪类茶",
+   "options": [
+    "绿茶",
+    "红茶",
+    "白茶",
+    "乌龙茶"
+   ],
+   "answer": "绿茶",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "福建名茶大红袍属于哪类茶": {
+   "question": "福建名茶“大红袍”属于哪类茶",
+   "options": [
+    "乌龙茶",
+    "绿茶",
+    "红茶",
+    "白茶"
+   ],
+   "answer": "乌龙茶",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "紫砂壶作为茶具和工艺品已有悠久历史它的原产地是": {
+   "question": "紫砂壶作为茶具和工艺品已有悠久历史，它的原产地是",
+   "options": [
+    "宜兴",
+    "重庆",
+    "黄山",
+    "广州"
+   ],
+   "answer": "宜兴",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "熬制中药一般常用的器具是": {
+   "question": "熬制中药一般常用的器具是",
+   "options": [
+    "砂锅砂壶",
+    "铁锅铁碗",
+    "玉制茶壶",
+    "铜壶铜碗"
+   ],
+   "answer": "砂锅砂壶",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "健胃类的中药一般怎样服用有利于药效的发挥": {
+   "question": "健胃类的中药一般怎样服用有利于药效的发挥",
+   "options": [
+    "饭前服用",
+    "饭后服用",
+    "与饭同食",
+    "绝食服用"
+   ],
+   "answer": "饭前服用",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "中药很早就有忌口的说法以下不是常见的忌口食物是": {
+   "question": "中药很早就有“忌口”的说法，以下“不是”常见的忌口食物是",
+   "options": [
+    "清淡食物",
+    "生冷食物",
+    "辛辣食物",
+    "油腻食物"
+   ],
+   "answer": "清淡食物",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "中药所说的饮片是指": {
+   "question": "中药所说的“饮片”是指",
+   "options": [
+    "加工炮制后的中药",
+    "一种服药的方式",
+    "可溶解于水的中药",
+    "可用水吞服的中药"
+   ],
+   "answer": "加工炮制后的中药",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "中医所说的白虎历节指的是哪种症状": {
+   "question": "中医所说的“白虎历节”指的是哪种症状",
+   "options": [
+    "关节肿痛",
+    "头晕乏力",
+    "高烧发热",
+    "四肢麻痹"
+   ],
+   "answer": "关节肿痛",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "以下与中医疗法针灸无关的是": {
+   "question": "以下与中医疗法“针灸”无关的是",
+   "options": [
+    "顶针",
+    "温针",
+    "火针",
+    "三棱针"
+   ],
+   "answer": "顶针",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "中医的针灸对人体穴位有很深的研究人体有一处涌泉穴位于": {
+   "question": "中医的“针灸”对人体穴位有很深的研究，人体有一处“涌泉穴”位于",
+   "options": [
+    "足底",
+    "颈椎",
+    "手背",
+    "手肘"
+   ],
+   "answer": "足底",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "中医的针灸对人体穴位有很深的研究人体有一处曲池穴位于": {
+   "question": "中医的“针灸”对人体穴位有很深的研究，人体有一处“曲池穴”位于",
+   "options": [
+    "肘部",
+    "掌心",
+    "脚踝",
+    "头部"
+   ],
+   "answer": "肘部",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "中华名酒汾酒有着1500多年的历史它的原产地是": {
+   "question": "中华名酒“汾酒”有着1500多年的历史，它的原产地是",
+   "options": [
+    "山西杏花村",
+    "四川泸州",
+    "四川宜宾",
+    "贵州遵义"
+   ],
+   "answer": "山西杏花村",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "清末商人胡雪岩创办的著名中药堂名叫": {
+   "question": "清末商人胡雪岩创办的著名中药堂名叫",
+   "options": [
+    "胡庆余堂",
+    "同仁堂",
+    "仁合堂",
+    "仁安堂"
+   ],
+   "answer": "胡庆余堂",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "配制世界上最早的麻醉药剂麻沸散的是": {
+   "question": "配制世界上最早的麻醉药剂“麻沸散”的是",
+   "options": [
+    "华佗",
+    "李时珍",
+    "扁鹊",
+    "张仲景"
+   ],
+   "answer": "华佗",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "中药里所说的陈皮是指": {
+   "question": "中药里所说的“陈皮”是指",
+   "options": [
+    "晒干的橘皮",
+    "晒干的桂树皮",
+    "药用兽皮的统称",
+    "晒干的蝉蜕"
+   ],
+   "answer": "晒干的橘皮",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "中药胖大海的主要功效是": {
+   "question": "中药“胖大海”的主要功效是",
+   "options": [
+    "润喉止咳",
+    "强筋健骨",
+    "补肝养肾",
+    "清热止痛"
+   ],
+   "answer": "润喉止咳",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "中药里的雄黄属于": {
+   "question": "中药里的“雄黄”属于",
+   "options": [
+    "矿物",
+    "植物",
+    "动物",
+    "合成药剂"
+   ],
+   "answer": "矿物",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "以下不是花茶中常用原料的是": {
+   "question": "以下“不是”花茶中常用原料的是",
+   "options": [
+    "君子兰",
+    "茉莉花",
+    "菊花",
+    "玫瑰"
+   ],
+   "answer": "君子兰",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "酿酒工艺中所提到的酒曲是指": {
+   "question": "酿酒工艺中所提到的“酒曲”是指",
+   "options": [
+    "用来发酵的酿酒原料",
+    "拜祭酒神时唱的歌曲",
+    "一种盛酒用的容器",
+    "酿酒的作坊"
+   ],
+   "answer": "用来发酵的酿酒原料",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "以下不是古代药酒常用原料的是": {
+   "question": "以下“不是”古代药酒常用原料的是",
+   "options": [
+    "鸡尾",
+    "虎骨",
+    "蛇胆",
+    "人参"
+   ],
+   "answer": "鸡尾",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "古代针灸用具是": {
+   "question": "古代针灸用具是",
+   "options": [
+    "九针",
+    "七针",
+    "五针",
+    "三针"
+   ],
+   "answer": "九针",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "明堂人形图是以下哪位医师的著作": {
+   "question": "《明堂人形图》是以下哪位医师的著作",
+   "options": [
+    "甄权",
+    "李时珍",
+    "孙思邈",
+    "扁鹊"
+   ],
+   "answer": "甄权",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "神医扁鹊是哪个朝代人": {
+   "question": "神医扁鹊是哪个朝代人",
+   "options": [
+    "春秋战国",
+    "东魏",
+    "北齐",
+    "西晋"
+   ],
+   "answer": "春秋战国",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "中药龙眼的主要功效是": {
+   "question": "中药“龙眼”的主要功效是",
+   "options": [
+    "补血安神",
+    "脾胃虚弱",
+    "止血化痰",
+    "益肾补肝"
+   ],
+   "answer": "补血安神",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "人参在古代有很多雅称以下不是人参雅称的是": {
+   "question": "人参在古代有很多雅称，以下不是人参雅称的是",
+   "options": [
+    "赤箭",
+    "神草",
+    "黄参",
+    "地精"
+   ],
+   "answer": "赤箭",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "在茶经中陆羽精心设计了多少种适于烹茶品饮的茶器": {
+   "question": "在《茶经》中，陆羽精心设计了多少种适于烹茶、品饮的茶器",
+   "options": [
+    "24",
+    "18",
+    "16",
+    "36"
+   ],
+   "answer": "24",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "被广大百姓推崇为中国国酒的是": {
+   "question": "被广大百姓推崇为中国“国酒”的是",
+   "options": [
+    "茅台",
+    "二锅头",
+    "汾酒",
+    "五粮液"
+   ],
+   "answer": "茅台",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "适量合理地饮用葡萄酒对人体有什么好处": {
+   "question": "适量合理地饮用葡萄酒，对人体有什么好处",
+   "options": [
+    "防治心血管病",
+    "防治肝硬化",
+    "防治胆结石",
+    "防治肺结核"
+   ],
+   "answer": "防治心血管病",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "一般情况下用什么材质的桶贮藏葡萄酒": {
+   "question": "一般情况下，用什么材质的桶贮藏葡萄酒",
+   "options": [
+    "橡木",
+    "紫檀木",
+    "胡杨木",
+    "桃木"
+   ],
+   "answer": "橡木",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "中医的针灸对人体穴位有很深的研究以下位于人体手部的穴位为": {
+   "question": "中医的“针灸”对人体穴位有很深的研究，以下位于人体手部的穴位为",
+   "options": [
+    "劳宫穴",
+    "风池穴",
+    "膻中穴",
+    "印堂穴"
+   ],
+   "answer": "劳宫穴",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "本草纲目是何人所著": {
+   "question": "《本草纲目》是何人所著？",
+   "options": [
+    "李时珍",
+    "苏轼",
+    "华佗",
+    "孙思邈"
+   ],
+   "answer": "李时珍",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "扁鹊提出诊断病人的四个步骤是什么": {
+   "question": "扁鹊提出诊断病人的四个步骤是什么？",
+   "options": [
+    "望、闻、问、切",
+    "听、察、勘、观",
+    "谈、吐、举、止",
+    "肉、毛、便、唾"
+   ],
+   "answer": "望、闻、问、切",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "黄酒名品加饭酒的产地在哪": {
+   "question": "黄酒名品“加饭酒”的产地在哪？",
+   "options": [
+    "浙江",
+    "武汉",
+    "四川",
+    "江苏"
+   ],
+   "answer": "浙江",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "传说中认为中国的酿酒始于杜康杜康是哪个朝代的人": {
+   "question": "传说中认为中国的酿酒始于杜康，杜康是哪个朝代的人",
+   "options": [
+    "夏朝",
+    "周朝",
+    "春秋时期",
+    "战国时期"
+   ],
+   "answer": "夏朝",
+   "category": "茶酒中药",
+   "official_first_is_answer": true
+  },
+  "越窑瓷器有秘色瓷之称这个秘指的是什么颜色": {
+   "question": "越窑瓷器有“秘色瓷”之称，这个“秘”指的是什么颜色",
+   "options": [
+    "青绿色",
+    "白色",
+    "米色",
+    "灰黑色"
+   ],
+   "answer": "青绿色",
+   "category": "古代工艺",
+   "official_first_is_answer": true
+  },
+  "中国古代乐器磬的质料主要是": {
+   "question": "中国古代乐器“磬”的质料主要是",
+   "options": [
+    "石灰石",
+    "贝壳",
+    "铁",
+    "黄铜"
+   ],
+   "answer": "石灰石",
+   "category": "古代工艺",
+   "official_first_is_answer": true
+  },
+  "蜡染是以下哪个民族特有的": {
+   "question": "蜡染是以下哪个民族特有的",
+   "options": [
+    "苗族",
+    "白族",
+    "汉族",
+    "水族"
+   ],
+   "answer": "苗族",
+   "category": "古代工艺",
+   "official_first_is_answer": true
+  },
+  "以下工具中哪种不是鲁班发明的": {
+   "question": "以下工具中，哪种不是鲁班发明的",
+   "options": [
+    "梯云纵",
+    "磨",
+    "碾",
+    "锁"
+   ],
+   "answer": "梯云纵",
+   "category": "古代工艺",
+   "official_first_is_answer": true
+  },
+  "我国什么时候开始用砖瓦": {
+   "question": "我国什么时候开始用砖瓦",
+   "options": [
+    "西周",
+    "东汉",
+    "南北朝",
+    "三国"
+   ],
+   "answer": "西周",
+   "category": "古代工艺",
+   "official_first_is_answer": true
+  },
+  "泥娃娃大阿福的老家是": {
+   "question": "泥娃娃“大阿福”的老家是",
+   "options": [
+    "无锡",
+    "南京",
+    "北京",
+    "西安"
+   ],
+   "answer": "无锡",
+   "category": "古代工艺",
+   "official_first_is_answer": true
+  },
+  "古代刺绣工艺里所说的四大名绣指的是": {
+   "question": "古代刺绣工艺里所说的“四大名绣”指的是",
+   "options": [
+    "苏绣蜀绣粤绣湘绣",
+    "苏绣湘绣苗绣京绣",
+    "粤绣湘绣苗绣苏绣",
+    "粤绣湘绣苗绣京绣"
+   ],
+   "answer": "苏绣蜀绣粤绣湘绣",
+   "category": "古代工艺",
+   "official_first_is_answer": true
+  },
+  "烙花工艺是中国民间传统工艺历史上以那个地方的烙花工艺最为有名": {
+   "question": "“烙花”工艺是中国民间传统工艺，历史上以那个地方的烙花工艺最为有名",
+   "options": [
+    "河南南阳",
+    "江苏常州",
+    "广西南宁",
+    "福建惠州"
+   ],
+   "answer": "河南南阳",
+   "category": "古代工艺",
+   "official_first_is_answer": true
+  },
+  "以下不属于中国古代民间艺术的是": {
+   "question": "以下“不属于”中国古代民间艺术的是",
+   "options": [
+    "石膏雕塑",
+    "彩陶人偶",
+    "砖雕艺术",
+    "煤精雕刻"
+   ],
+   "answer": "石膏雕塑",
+   "category": "古代工艺",
+   "official_first_is_answer": true
+  },
+  "清代官服上绣有方形图案称为补子其中一品文官的补子图案是": {
+   "question": "清代官服上绣有方形图案，称为“补子”，其中一品文官的补子图案是",
+   "options": [
+    "孔雀",
+    "凤凰",
+    "仙鹤",
+    "小鸭"
+   ],
+   "answer": "仙鹤",
+   "category": "古代工艺",
+   "official_first_is_answer": false
+  },
+  "清代官服上绣有方形图案称为补子其中一品武官的补子图案是": {
+   "question": "清代官服上绣有方形图案，称为“补子”，其中一品武官的补子图案是",
+   "options": [
+    "狮子",
+    "豹子",
+    "麒麟",
+    "蛟龙"
+   ],
+   "answer": "麒麟",
+   "category": "古代工艺",
+   "official_first_is_answer": false
+  },
+  "古代有一种名为珮的首饰一般是佩带在哪里": {
+   "question": "古代有一种名为“珮”的首饰，一般是佩带在哪里",
+   "options": [
+    "腰",
+    "头",
+    "胸",
+    "腕"
+   ],
+   "answer": "腰",
+   "category": "古代工艺",
+   "official_first_is_answer": true
+  },
+  "古代被称为天南贡品的是哪种工艺品": {
+   "question": "古代被称为“天南贡品”的是哪种工艺品",
+   "options": [
+    "椰雕",
+    "贝雕",
+    "唐三彩",
+    "云雕"
+   ],
+   "answer": "椰雕",
+   "category": "古代工艺",
+   "official_first_is_answer": true
+  },
+  "杀青是哪项古代工艺中的一道工序": {
+   "question": "“杀青”是哪项古代工艺中的一道工序",
+   "options": [
+    "制茶工艺",
+    "酿酒工艺",
+    "蜡染工艺",
+    "刺绣工艺"
+   ],
+   "answer": "制茶工艺",
+   "category": "古代工艺",
+   "official_first_is_answer": true
+  },
+  "古人发明的一种工具耒耜读lěisì用在哪个行业": {
+   "question": "古人发明的一种工具“耒耜”（读ｌěｉｓì）用在哪个行业",
+   "options": [
+    "农业",
+    "军事",
+    "印染",
+    "建筑"
+   ],
+   "answer": "农业",
+   "category": "古代工艺",
+   "official_first_is_answer": true
+  },
+  "天工开物是明代记载农业手工业技术的著作其作者是": {
+   "question": "《天工开物》是明代记载农业手工业技术的著作，其作者是",
+   "options": [
+    "宋应星",
+    "汤显祖",
+    "王祯",
+    "沈括"
+   ],
+   "answer": "宋应星",
+   "category": "古代工艺",
+   "official_first_is_answer": true
+  },
+  "北宋沈括所著的梦溪笔谈主要记载的是": {
+   "question": "北宋沈括所著的《梦溪笔谈》主要记载的是",
+   "options": [
+    "古代科技",
+    "古代文学",
+    "儒家思想",
+    "历史典故"
+   ],
+   "answer": "古代科技",
+   "category": "古代工艺",
+   "official_first_is_answer": true
+  },
+  "宋瓷闻名世界宋代五大名窑除定窑哥窑钧窑官窑外还有": {
+   "question": "“宋瓷”闻名世界，宋代五大名窑除定窑、哥窑、钧窑、官窑外，还有",
+   "options": [
+    "汝窑",
+    "龙泉窑",
+    "磁州窑",
+    "琼窑"
+   ],
+   "answer": "汝窑",
+   "category": "古代工艺",
+   "official_first_is_answer": true
+  },
+  "宋代制瓷业非常繁荣著名的汝窑位于哪个省": {
+   "question": "宋代制瓷业非常繁荣，著名的汝窑位于哪个省",
+   "options": [
+    "河北",
+    "安徽",
+    "河南",
+    "广西"
+   ],
+   "answer": "河南",
+   "category": "古代工艺",
+   "official_first_is_answer": false
+  },
+  "北宋庆历年间印刷技术逐渐成熟在雕版印刷基础上出现了活字印刷这项技术的发明人是": {
+   "question": "北宋庆历年间，印刷技术逐渐成熟，在雕版印刷基础上出现了“活字印刷”，这项技术的发明人是",
+   "options": [
+    "毕昇",
+    "鲁班",
+    "张衡",
+    "蔡伦"
+   ],
+   "answer": "毕昇",
+   "category": "古代工艺",
+   "official_first_is_answer": true
+  },
+  "东汉时期纸张逐渐代替竹简和丝帛来书写文字谁对造纸术起了巨大的推动作用": {
+   "question": "东汉时期，纸张逐渐代替竹简和丝帛来书写文字，谁对造纸术起了巨大的推动作用",
+   "options": [
+    "蔡伦",
+    "毕昇",
+    "鲁班",
+    "张衡"
+   ],
+   "answer": "蔡伦",
+   "category": "古代工艺",
+   "official_first_is_answer": true
+  },
+  "东汉时期我国出现了世界上第一台监测报告地震的仪器候风地动仪它的发明者是": {
+   "question": "东汉时期我国出现了世界上第一台监测报告地震的仪器“候风地动仪”，它的发明者是",
+   "options": [
+    "张衡",
+    "祖冲之",
+    "鲁班",
+    "沈括"
+   ],
+   "answer": "张衡",
+   "category": "古代工艺",
+   "official_first_is_answer": true
+  },
+  "景泰蓝工艺品的主要原料是": {
+   "question": "“景泰蓝”工艺品的主要原料是",
+   "options": [
+    "铜",
+    "木",
+    "泥",
+    "玉"
+   ],
+   "answer": "铜",
+   "category": "古代工艺",
+   "official_first_is_answer": true
+  },
+  "古代工艺中的云雕是指": {
+   "question": "古代工艺中的“云雕”是指",
+   "options": [
+    "一种漆雕工艺",
+    "一种木雕工艺",
+    "一种泥塑工艺",
+    "一种蜡染工艺"
+   ],
+   "answer": "一种漆雕工艺",
+   "category": "古代工艺",
+   "official_first_is_answer": true
+  },
+  "秦代的兵马俑体现了古代工匠的哪项高超技艺": {
+   "question": "秦代的“兵马俑”体现了古代工匠的哪项高超技艺",
+   "options": [
+    "制陶工艺",
+    "青铜工艺",
+    "根雕艺术",
+    "蜡染工艺"
+   ],
+   "answer": "制陶工艺",
+   "category": "古代工艺",
+   "official_first_is_answer": true
+  },
+  "古代新春有贴年画的习俗画中的鲤鱼代表哪种寓意": {
+   "question": "古代新春有贴年画的习俗，画中的鲤鱼代表哪种寓意",
+   "options": [
+    "连年有余",
+    "吉祥如意",
+    "财源广进",
+    "六畜兴旺"
+   ],
+   "answer": "连年有余",
+   "category": "古代工艺",
+   "official_first_is_answer": true
+  },
+  "翡翠是古代一种贵重的玉器材料它在材质上属于": {
+   "question": "翡翠是古代一种贵重的玉器材料，它在材质上属于",
+   "options": [
+    "矿物",
+    "金属",
+    "化石",
+    "合成材料"
+   ],
+   "answer": "矿物",
+   "category": "古代工艺",
+   "official_first_is_answer": true
+  },
+  "古代民间所用的顶针属于": {
+   "question": "古代民间所用的“顶针”属于",
+   "options": [
+    "缝纫用具",
+    "一种暗器",
+    "女子装饰品",
+    "农用耕具"
+   ],
+   "answer": "缝纫用具",
+   "category": "古代工艺",
+   "official_first_is_answer": true
+  },
+  "三国演义里木牛流马是谁制造的": {
+   "question": "三国演义里“木牛流马”是谁制造的",
+   "options": [
+    "诸葛亮",
+    "郭嘉",
+    "荀攸",
+    "司马懿"
+   ],
+   "answer": "诸葛亮",
+   "category": "古代工艺",
+   "official_first_is_answer": true
+  },
+  "丝绸的生产原料是": {
+   "question": "丝绸的生产原料是",
+   "options": [
+    "蚕丝",
+    "棉丝",
+    "麻丝",
+    "羊毛"
+   ],
+   "answer": "蚕丝",
+   "category": "古代工艺",
+   "official_first_is_answer": true
+  },
+  "洛阳白马寺创建于": {
+   "question": "洛阳白马寺创建于",
+   "options": [
+    "东汉",
+    "南唐",
+    "北宋",
+    "明朝"
+   ],
+   "answer": "东汉",
+   "category": "古代工艺",
+   "official_first_is_answer": true
+  },
+  "欲剪湘中一尺天吴娥莫道吴刀涩盛赞": {
+   "question": "“欲剪湘中一尺天，吴娥莫道吴刀涩”盛赞",
+   "options": [
+    "葛布的精美",
+    "丝绸的精美",
+    "云纱的精美",
+    "刺绣"
+   ],
+   "answer": "葛布的精美",
+   "category": "古代工艺",
+   "official_first_is_answer": true
+  },
+  "太师椅最早使用于": {
+   "question": "太师椅最早使用于",
+   "options": [
+    "宋",
+    "清",
+    "明",
+    "唐"
+   ],
+   "answer": "宋",
+   "category": "古代工艺",
+   "official_first_is_answer": true
+  },
+  "皮影戏最早诞生在两千年前的西汉发祥于中国哪个地区": {
+   "question": "皮影戏最早诞生在两千年前的西汉，发祥于中国哪个地区",
+   "options": [
+    "陕西",
+    "山西",
+    "河北",
+    "河南"
+   ],
+   "answer": "陕西",
+   "category": "古代工艺",
+   "official_first_is_answer": true
+  },
+  "爱品茗者必爱壶壶又以紫砂壶为上紫砂壶以哪个地方最为盛名": {
+   "question": "爱品茗者必爱壶，壶又以“紫砂壶”为上，“紫砂壶”以哪个地方最为盛名",
+   "options": [
+    "宜兴",
+    "宜宾",
+    "湖州",
+    "景德镇"
+   ],
+   "answer": "宜兴",
+   "category": "古代工艺",
+   "official_first_is_answer": true
+  },
+  "黑火药是中国古代四大发明之一它的混合成分不包括": {
+   "question": "黑火药是中国古代四大发明之一，它的混合成分不包括",
+   "options": [
+    "甘油",
+    "木炭",
+    "硝石",
+    "硫磺"
+   ],
+   "answer": "甘油",
+   "category": "古代工艺",
+   "official_first_is_answer": true
+  },
+  "马踏飞燕又称为马超龙雀是什么朝代青铜艺术的杰出代表": {
+   "question": "马踏飞燕又称为马超龙雀，是什么朝代青铜艺术的杰出代表",
+   "options": [
+    "东汉",
+    "西汉",
+    "东晋",
+    "西晋"
+   ],
+   "answer": "东汉",
+   "category": "古代工艺",
+   "official_first_is_answer": true
+  },
+  "下列工具哪个不是鲁班发明的": {
+   "question": "下列工具哪个不是鲁班发明的？",
+   "options": [
+    "圆规",
+    "曲尺",
+    "墨斗",
+    "锯"
+   ],
+   "answer": "圆规",
+   "category": "古代工艺",
+   "official_first_is_answer": true
+  },
+  "世界上最长的运河是": {
+   "question": "世界上最长的运河是",
+   "options": [
+    "京杭大运河",
+    "苏伊士运河",
+    "巴拿马运河",
+    "福斯戴克运河"
+   ],
+   "answer": "京杭大运河",
+   "category": "古代工艺",
+   "official_first_is_answer": true
+  },
+  "中国古代建筑中有顶的通道称为": {
+   "question": "中国古代建筑中有顶的通道称为",
+   "options": [
+    "廊",
+    "甬道",
+    "折巷",
+    "胡同"
+   ],
+   "answer": "廊",
+   "category": "古代工艺",
+   "official_first_is_answer": true
+  },
+  "我国梁式桥型的精品杰作洛阳桥位于何地": {
+   "question": "我国梁式桥型的精品杰作洛阳桥位于何地？",
+   "options": [
+    "福建泉州",
+    "浙江",
+    "北京",
+    "南京"
+   ],
+   "answer": "福建泉州",
+   "category": "古代工艺",
+   "official_first_is_answer": true
+  },
+  "古代著名的水利工程都江堰是谁设计的": {
+   "question": "古代著名的水利工程都江堰是谁设计的？",
+   "options": [
+    "李冰父子",
+    "西门豹",
+    "东方朔",
+    "袁天罡"
+   ],
+   "answer": "李冰父子",
+   "category": "古代工艺",
+   "official_first_is_answer": true
+  },
+  "在我国自古就有天府之国美誉的地区是": {
+   "question": "在我国，自古就有“天府之国”美誉的地区是",
+   "options": [
+    "四川盆地",
+    "杭州",
+    "苏州",
+    "江浙地区"
+   ],
+   "answer": "四川盆地",
+   "category": "古代工艺",
+   "official_first_is_answer": true
+  },
+  "铜权是古代常见的金属器物后来被俗称为什么": {
+   "question": "“铜权”是古代常见的金属器物，后来被俗称为什么？",
+   "options": [
+    "秤砣",
+    "香炉",
+    "铜镜",
+    "酒壶"
+   ],
+   "answer": "秤砣",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "著名的女史箴图是哪位画家的作品": {
+   "question": "著名的《女史箴图》是哪位画家的作品",
+   "options": [
+    "顾恺之",
+    "王熙之",
+    "吴道子",
+    "阎立本"
+   ],
+   "answer": "顾恺之",
+   "category": "书画艺术",
+   "official_first_is_answer": true
+  },
+  "被誉为书圣的是哪位书法名家": {
+   "question": "被誉为“书圣”的是哪位书法名家",
+   "options": [
+    "王羲之",
+    "吴道子",
+    "顾恺之",
+    "阎立本"
+   ],
+   "answer": "王羲之",
+   "category": "书画艺术",
+   "official_first_is_answer": true
+  },
+  "有画圣美誉的吴道子是哪朝人": {
+   "question": "有“画圣”美誉的吴道子是哪朝人",
+   "options": [
+    "唐朝",
+    "隋朝",
+    "西晋",
+    "北魏"
+   ],
+   "answer": "唐朝",
+   "category": "书画艺术",
+   "official_first_is_answer": true
+  },
+  "以草书见长人称草圣的书法家是": {
+   "question": "以草书见长，人称“草圣”的书法家是",
+   "options": [
+    "张旭",
+    "欧阳询",
+    "王羲之",
+    "王献之"
+   ],
+   "answer": "张旭",
+   "category": "书画艺术",
+   "official_first_is_answer": true
+  },
+  "被称为文房四宝的是": {
+   "question": "被称为“文房四宝”的是",
+   "options": [
+    "笔墨纸砚",
+    "棋琴画书",
+    "诗画茶琴",
+    "琴棋茶书"
+   ],
+   "answer": "笔墨纸砚",
+   "category": "书画艺术",
+   "official_first_is_answer": true
+  },
+  "不属于明四家的画家是": {
+   "question": "不属于“明四家”的画家是",
+   "options": [
+    "阎立本",
+    "文征明",
+    "唐寅",
+    "仇英"
+   ],
+   "answer": "阎立本",
+   "category": "书画艺术",
+   "official_first_is_answer": true
+  },
+  "唐朝的唐字由多少笔画组成": {
+   "question": "唐朝的“唐”字由多少笔画组成？",
+   "options": [
+    "十画",
+    "八画",
+    "十二画",
+    "九画"
+   ],
+   "answer": "十画",
+   "category": "书画艺术",
+   "official_first_is_answer": true
+  },
+  "唐朝的朝字由多少笔画组成": {
+   "question": "唐朝的“朝”字由多少笔画组成？",
+   "options": [
+    "十二画",
+    "十画",
+    "十一画",
+    "九画"
+   ],
+   "answer": "十二画",
+   "category": "书画艺术",
+   "official_first_is_answer": true
+  },
+  "梦幻西游的游字一共由多少笔画组成": {
+   "question": "“梦幻西游”的“游”字一共由多少笔画组成",
+   "options": [
+    "十二画",
+    "十一画",
+    "十三画",
+    "十四画"
+   ],
+   "answer": "十二画",
+   "category": "书画艺术",
+   "official_first_is_answer": true
+  },
+  "长安两字一共由多少笔画组成": {
+   "question": "“长安”两字一共由多少笔画组成",
+   "options": [
+    "十画",
+    "八画",
+    "十二画",
+    "九画"
+   ],
+   "answer": "十画",
+   "category": "书画艺术",
+   "official_first_is_answer": true
+  },
+  "下列哪个字具有汉字的八种基本笔画点横竖撇捺折钩提": {
+   "question": "下列哪个字具有汉字的八种基本笔画“点、横、竖、撇、捺、折、钩、提”",
+   "options": [
+    "永",
+    "俗",
+    "松",
+    "宝"
+   ],
+   "answer": "永",
+   "category": "书画艺术",
+   "official_first_is_answer": true
+  },
+  "我国第一部系统分析字形和考求字的本义的字典是": {
+   "question": "我国第一部系统分析字形和考求字的本义的字典是",
+   "options": [
+    "说文解字",
+    "康熙字典",
+    "辞源",
+    "辞海"
+   ],
+   "answer": "说文解字",
+   "category": "书画艺术",
+   "official_first_is_answer": true
+  },
+  "古代名画洛神赋图的作者是": {
+   "question": "古代名画“洛神赋图”的作者是",
+   "options": [
+    "顾恺之",
+    "吴道子",
+    "阎立本",
+    "王献之"
+   ],
+   "answer": "顾恺之",
+   "category": "书画艺术",
+   "official_first_is_answer": true
+  },
+  "隋朝的隋字由多少笔画组成": {
+   "question": "隋朝的“隋”字由多少笔画组成？",
+   "options": [
+    "十一画",
+    "八画",
+    "十画",
+    "九画"
+   ],
+   "answer": "十一画",
+   "category": "书画艺术",
+   "official_first_is_answer": true
+  },
+  "以画竹子著称的书画家郑板桥是哪个朝代的人": {
+   "question": "以画竹子著称的书画家郑板桥是哪个朝代的人",
+   "options": [
+    "清朝",
+    "明朝",
+    "唐朝",
+    "北宋"
+   ],
+   "answer": "清朝",
+   "category": "书画艺术",
+   "official_first_is_answer": true
+  },
+  "古代书画按风格来讲工笔绘画注重": {
+   "question": "古代书画按风格来讲，“工笔”绘画注重",
+   "options": [
+    "细致写实",
+    "挥洒随意",
+    "场面宏大",
+    "用笔简练"
+   ],
+   "answer": "细致写实",
+   "category": "书画艺术",
+   "official_first_is_answer": true
+  },
+  "书画工艺中所称的裱画是指": {
+   "question": "书画工艺中所称的“裱画”是指",
+   "options": [
+    "为书画配上衬纸卷轴以便张贴和收藏",
+    "对名家书画进行临摹",
+    "将书画雕刻成木制匾额",
+    "只有黑白而没有彩色的画"
+   ],
+   "answer": "为书画配上衬纸卷轴以便张贴和收藏",
+   "category": "书画艺术",
+   "official_first_is_answer": true
+  },
+  "昔年有狂客号尔谛仙人笔落惊风雨诗成泣鬼神是纪念谁的诗词": {
+   "question": "昔年有狂客，号尔谛仙人。笔落惊风雨，诗成泣鬼神。是纪念谁的诗词？",
+   "options": [
+    "李白",
+    "杜甫",
+    "骆宾王",
+    "苏轼"
+   ],
+   "answer": "李白",
+   "category": "书画艺术",
+   "official_first_is_answer": true
+  },
+  "史记的作者是": {
+   "question": "《史记》的作者是？",
+   "options": [
+    "司马迁",
+    "司马光",
+    "司马相如",
+    "司马昭"
+   ],
+   "answer": "司马迁",
+   "category": "书画艺术",
+   "official_first_is_answer": true
+  },
+  "红娘是哪部作品中的人物": {
+   "question": "“红娘”是哪部作品中的人物",
+   "options": [
+    "《西厢记》",
+    "《霍小玉》",
+    "《拜月记》",
+    "《柳毅传》"
+   ],
+   "answer": "《西厢记》",
+   "category": "书画艺术",
+   "official_first_is_answer": true
+  },
+  "清初四画僧中八大山人指的是": {
+   "question": "“清初四画僧”中，“八大山人”指的是",
+   "options": [
+    "朱耷",
+    "原济",
+    "髡残",
+    "渐江"
+   ],
+   "answer": "朱耷",
+   "category": "书画艺术",
+   "official_first_is_answer": true
+  },
+  "中国十位名画家各有其长擅长画虎的是": {
+   "question": "中国十位名画家各有其长，擅长画虎的是",
+   "options": [
+    "徐悲鸿",
+    "张大千",
+    "齐白石",
+    "黄胄"
+   ],
+   "answer": "张大千",
+   "category": "书画艺术",
+   "official_first_is_answer": false
+  },
+  "三国演义中的凤雏是": {
+   "question": "《三国演义》中的“凤雏”是",
+   "options": [
+    "庞统",
+    "典韦",
+    "诸葛亮",
+    "周瑜"
+   ],
+   "answer": "庞统",
+   "category": "书画艺术",
+   "official_first_is_answer": true
+  },
+  "以下作品中哪幅画不属于徐悲鸿的作品": {
+   "question": "以下作品中，哪幅画不属于徐悲鸿的作品",
+   "options": [
+    "荷花",
+    "愚公移山",
+    "八骏图",
+    "九方皋"
+   ],
+   "answer": "荷花",
+   "category": "书画艺术",
+   "official_first_is_answer": true
+  },
+  "世称颜筋柳骨的书法大家柳公权他是哪个朝代人士": {
+   "question": "世称“颜筋柳骨”的书法大家柳公权，他是哪个朝代人士",
+   "options": [
+    "唐朝",
+    "宋朝",
+    "汉朝",
+    "隋朝"
+   ],
+   "answer": "唐朝",
+   "category": "书画艺术",
+   "official_first_is_answer": true
+  },
+  "下列书法家中哪位是明代的": {
+   "question": "下列书法家中，哪位是明代的？",
+   "options": [
+    "董其昌",
+    "柳公权",
+    "张旭",
+    "颜真卿"
+   ],
+   "answer": "董其昌",
+   "category": "书画艺术",
+   "official_first_is_answer": true
+  },
+  "古诗名句飘飘何所似天地一沙鸥作者是": {
+   "question": "古诗名句“飘飘何所似，天地一沙鸥。”作者是",
+   "options": [
+    "杜甫",
+    "苏轼",
+    "孟浩然",
+    "王维"
+   ],
+   "answer": "杜甫",
+   "category": "诗词对联",
+   "official_first_is_answer": true
+  },
+  "古诗名句人生自古谁无死留取丹心照汗青的作者是": {
+   "question": "古诗名句“人生自古谁无死，留取丹心照汗青”的作者是",
+   "options": [
+    "文天祥",
+    "苏东坡",
+    "米芾",
+    "柳永"
+   ],
+   "answer": "文天祥",
+   "category": "诗词对联",
+   "official_first_is_answer": true
+  },
+  "名句流水落花春去也天上人间的词牌名是": {
+   "question": "名句“流水落花春去也，天上人间”的词牌名是",
+   "options": [
+    "浪淘沙",
+    "何满子",
+    "卜算子",
+    "汉宫春"
+   ],
+   "answer": "浪淘沙",
+   "category": "诗词对联",
+   "official_first_is_answer": true
+  },
+  "古诗名句空山不见人的下句是": {
+   "question": "古诗名句“空山不见人”的下句是",
+   "options": [
+    "但闻人语响",
+    "复照青苔上",
+    "言师采药去",
+    "云深不知处"
+   ],
+   "answer": "但闻人语响",
+   "category": "诗词对联",
+   "official_first_is_answer": true
+  },
+  "古诗名句人生若只如初见的下句是": {
+   "question": "古诗名句“人生若只如初见”的下句是",
+   "options": [
+    "何事秋风悲画扇",
+    "等闲变却故人心",
+    "却道故心人易变",
+    "夜雨霖铃终不怨"
+   ],
+   "answer": "何事秋风悲画扇",
+   "category": "诗词对联",
+   "official_first_is_answer": true
+  },
+  "古诗名句此情可待成追忆的下句是": {
+   "question": "古诗名句“此情可待成追忆”的下句是",
+   "options": [
+    "只是当时已惘然",
+    "万水千山总是情",
+    "碧水东流至此回",
+    "明月何时照我还"
+   ],
+   "answer": "只是当时已惘然",
+   "category": "诗词对联",
+   "official_first_is_answer": true
+  },
+  "古诗名句忽见陌头杨柳色的下句是": {
+   "question": "古诗名句“忽见陌头杨柳色”的下句是",
+   "options": [
+    "悔教夫婿觅封侯",
+    "山外青山楼外楼",
+    "一将功成万骨枯",
+    "两鬓苍苍十指黑"
+   ],
+   "answer": "悔教夫婿觅封侯",
+   "category": "诗词对联",
+   "official_first_is_answer": true
+  },
+  "古诗名句洛阳亲友如相问的下句是": {
+   "question": "古诗名句“洛阳亲友如相问”的下句是",
+   "options": [
+    "一片冰心在玉壶",
+    "怕得鱼惊不应人",
+    "漫卷诗书喜欲狂",
+    "暂凭杯酒长精神"
+   ],
+   "answer": "一片冰心在玉壶",
+   "category": "诗词对联",
+   "official_first_is_answer": true
+  },
+  "古诗名句白日放歌须纵酒的下句是": {
+   "question": "古诗名句“白日放歌须纵酒”的下句是",
+   "options": [
+    "青春做伴好还乡",
+    "便下襄阳向洛阳",
+    "漫卷诗书喜欲狂",
+    "初闻涕泪满衣裳"
+   ],
+   "answer": "青春做伴好还乡",
+   "category": "诗词对联",
+   "official_first_is_answer": true
+  },
+  "古诗名句凭君莫话封侯事的下句是": {
+   "question": "古诗名句“凭君莫话封侯事”的下句是",
+   "options": [
+    "一将功成万骨枯",
+    "暂凭杯酒长精神",
+    "万国兵前草木风",
+    "何人倚剑白云天"
+   ],
+   "answer": "一将功成万骨枯",
+   "category": "诗词对联",
+   "official_first_is_answer": true
+  },
+  "古诗名句燕山雪花大如席的下句是": {
+   "question": "古诗名句“燕山雪花大如席”的下句是",
+   "options": [
+    "片片吹落轩辕台",
+    "牧马群嘶边草绿",
+    "惟有北风天上来",
+    "纷纷轻薄何须数"
+   ],
+   "answer": "片片吹落轩辕台",
+   "category": "诗词对联",
+   "official_first_is_answer": true
+  },
+  "古诗名句正是江南好风景的下句是": {
+   "question": "古诗名句“正是江南好风景”的下句是",
+   "options": [
+    "落花时节又逢君",
+    "烟花三月下扬州",
+    "仙乐风飘处处闻",
+    "千乘万骑西南行"
+   ],
+   "answer": "落花时节又逢君",
+   "category": "诗词对联",
+   "official_first_is_answer": true
+  },
+  "古诗名句一道残阳铺水中的下句是": {
+   "question": "古诗名句“一道残阳铺水中”的下句是",
+   "options": [
+    "半江瑟瑟半江红",
+    "天长路远魂飞苦",
+    "流光欺人忽蹉跎",
+    "与尔同销万古愁"
+   ],
+   "answer": "半江瑟瑟半江红",
+   "category": "诗词对联",
+   "official_first_is_answer": true
+  },
+  "云想衣裳花想容春风拂槛露华浓若非群玉山头见会向瑶台月下逢这是李白为谁写的": {
+   "question": "云想衣裳花想容，春风拂槛露华浓。若非群玉山头见，会向瑶台月下逢。这是李白为谁写的？",
+   "options": [
+    "杨玉环",
+    "貂蝉",
+    "王昭君",
+    "西施"
+   ],
+   "answer": "杨玉环",
+   "category": "诗词对联",
+   "official_first_is_answer": true
+  },
+  "长风破浪会有时直挂云帆济沧海出自李白的哪首诗": {
+   "question": "“长风破浪会有时，直挂云帆济沧海”出自李白的哪首诗",
+   "options": [
+    "行路难",
+    "夜宿山寺",
+    "望庐山瀑布",
+    "月下独酌"
+   ],
+   "answer": "行路难",
+   "category": "诗词对联",
+   "official_first_is_answer": true
+  },
+  "危楼高百尺手可摘星辰出自李白的哪首诗": {
+   "question": "“危楼高百尺，手可摘星辰”出自李白的哪首诗",
+   "options": [
+    "夜宿山寺",
+    "苏台览古",
+    "天台晓望",
+    "望黄鹤楼"
+   ],
+   "answer": "夜宿山寺",
+   "category": "诗词对联",
+   "official_first_is_answer": true
+  },
+  "黄庭坚欲问江南近消息喜君贻我一枝春中的一枝春指的是": {
+   "question": "黄庭坚“欲问江南近消息，喜君贻我一枝春”中的“一枝春”指的是",
+   "options": [
+    "梅花",
+    "桃花",
+    "杏花",
+    "菊花"
+   ],
+   "answer": "梅花",
+   "category": "诗词对联",
+   "official_first_is_answer": true
+  },
+  "孤帆远影碧空尽惟见长江天际流出自哪首诗": {
+   "question": "“孤帆远影碧空尽，惟见长江天际流”出自哪首诗",
+   "options": [
+    "送孟浩然之广陵",
+    "早发白帝城",
+    "江南逢李龟年",
+    "望天门山"
+   ],
+   "answer": "送孟浩然之广陵",
+   "category": "诗词对联",
+   "official_first_is_answer": true
+  },
+  "几处早莺争暖树谁家新燕啄春泥出自哪首诗": {
+   "question": "“几处早莺争暖树，谁家新燕啄春泥”出自哪首诗",
+   "options": [
+    "钱塘湖春行",
+    "送孟浩然之广陵",
+    "前出塞",
+    "卖炭翁"
+   ],
+   "answer": "钱塘湖春行",
+   "category": "诗词对联",
+   "official_first_is_answer": true
+  },
+  "下面哪句不是描写梅花的": {
+   "question": "下面哪句不是描写梅花的？",
+   "options": [
+    "一从陶令平章后，千古高风说到今。",
+    "零落成泥碾作尘，只有香如故。",
+    "众芳摇落独暄妍，占尽风情向小园。",
+    "雪满山中高士卧，月明林下美人来。"
+   ],
+   "answer": "一从陶令平章后，千古高风说到今。",
+   "category": "诗词对联",
+   "official_first_is_answer": true
+  },
+  "长恨歌中忽闻海上有仙山的下句是": {
+   "question": "《长恨歌》中“忽闻海上有仙山”的下句是",
+   "options": [
+    "山在虚无缥缈间",
+    "又说山上有神仙",
+    "两处茫茫皆不见",
+    "只惜浪大难行船"
+   ],
+   "answer": "山在虚无缥缈间",
+   "category": "诗词对联",
+   "official_first_is_answer": true
+  },
+  "古诗名句海上生明月的下句是": {
+   "question": "古诗名句“海上生明月”的下句是",
+   "options": [
+    "天涯共此时",
+    "润物细无声",
+    "人对一支秋",
+    "浑欲不胜簪"
+   ],
+   "answer": "天涯共此时",
+   "category": "诗词对联",
+   "official_first_is_answer": true
+  },
+  "苏轼赤壁怀古中的遥想公瑾当年一句所指人物是": {
+   "question": "苏轼《赤壁怀古》中的“遥想公瑾当年”一句所指人物是",
+   "options": [
+    "周瑜",
+    "诸葛亮",
+    "孙权",
+    "刘备"
+   ],
+   "answer": "周瑜",
+   "category": "诗词对联",
+   "official_first_is_answer": true
+  },
+  "莫道不消魂帘卷西风人比瘦括号内的文字是": {
+   "question": "“莫道不消魂，帘卷西风，人比（）瘦。”括号内的文字是",
+   "options": [
+    "黄花",
+    "海棠",
+    "青莲",
+    "红花"
+   ],
+   "answer": "黄花",
+   "category": "诗词对联",
+   "official_first_is_answer": true
+  },
+  "苏轼赤壁怀古中乱石穿空惊涛拍岸的下一句是": {
+   "question": "苏轼《赤壁怀古》中“乱石穿空，惊涛拍岸”的下一句是",
+   "options": [
+    "卷起千堆雪",
+    "卷起千层雪",
+    "卷起千片雪",
+    "卷起千块雪"
+   ],
+   "answer": "卷起千堆雪",
+   "category": "诗词对联",
+   "official_first_is_answer": true
+  },
+  "岳飞满江红中三十功名尘与土八千里路云和月下一句是": {
+   "question": "岳飞《满江红》中“三十功名尘与土，八千里路云和月”下一句是",
+   "options": [
+    "莫等闲，白了少年头，空悲切",
+    "驾长车，踏破贺兰山缺",
+    "抬望眼，仰天长啸，壮怀激烈",
+    "壮志饥餐胡虏肉，笑谈渴饮匈奴血"
+   ],
+   "answer": "莫等闲，白了少年头，空悲切",
+   "category": "诗词对联",
+   "official_first_is_answer": true
+  },
+  "安能摧眉折腰事权贵使我不得开心颜出自李白的": {
+   "question": "“安能摧眉折腰事权贵，使我不得开心颜！”出自李白的",
+   "options": [
+    "梦游天姥吟留别",
+    "将进酒",
+    "送孟浩然之广陵",
+    "静夜思"
+   ],
+   "answer": "梦游天姥吟留别",
+   "category": "诗词对联",
+   "official_first_is_answer": true
+  },
+  "慨当以慷忧思难忘作者是": {
+   "question": "“慨当以慷，忧思难忘”作者是？",
+   "options": [
+    "曹操",
+    "曹植",
+    "曹丕",
+    "曹冲"
+   ],
+   "answer": "曹操",
+   "category": "诗词对联",
+   "official_first_is_answer": true
+  },
+  "古诗名句梅落繁枝千万片犹自多情学雪随风转的作者是": {
+   "question": "古诗名句：“梅落繁枝千万片，犹自多情，学雪随风转。”的作者是？",
+   "options": [
+    "冯延巳",
+    "张九龄",
+    "韩愈",
+    "李商隐"
+   ],
+   "answer": "冯延巳",
+   "category": "诗词对联",
+   "official_first_is_answer": true
+  },
+  "古诗名句清瑟怨遥夜的下句是": {
+   "question": "古诗名句：“清瑟怨遥夜”的下句是？",
+   "options": [
+    "绕弦风雨哀",
+    "野径入桑麻",
+    "残月下章台",
+    "关月冷相随"
+   ],
+   "answer": "绕弦风雨哀",
+   "category": "诗词对联",
+   "official_first_is_answer": true
+  },
+  "古诗词名句红藕香残玉簟秋出自南宋著名女词人李清照哪首佳作": {
+   "question": "古诗词名句“红藕香残玉簟秋”出自南宋著名女词人李清照哪首佳作",
+   "options": [
+    "《一剪梅》",
+    "《如梦令》",
+    "《小重山》",
+    "《玉楼春》"
+   ],
+   "answer": "《一剪梅》",
+   "category": "诗词对联",
+   "official_first_is_answer": true
+  },
+  "古诗名句去年花里逢君别的下句": {
+   "question": "古诗名句:“去年花里逢君别”的下句",
+   "options": [
+    "今日花开又一年。",
+    "今日江南又逢君",
+    "醉里吴音相媚好",
+    "楚客相思益渺然"
+   ],
+   "answer": "今日花开又一年。",
+   "category": "诗词对联",
+   "official_first_is_answer": true
+  },
+  "古诗名句身无彩凤双飞翼的上一句是": {
+   "question": "古诗名句“身无彩凤双飞翼”的上一句是",
+   "options": [
+    "心有灵犀一点通",
+    "画楼西畔桂堂东",
+    "昨夜星辰昨夜风",
+    "青鸟殷勤为探看"
+   ],
+   "answer": "画楼西畔桂堂东",
+   "category": "诗词对联",
+   "official_first_is_answer": false
+  },
+  "十年生死两茫茫不思量自难忘千里孤坟无处话凄凉出自苏轼的哪首词": {
+   "question": "“十年生死两茫茫。不思量，自难忘。千里孤坟，无处话凄凉。”出自苏轼的哪首词",
+   "options": [
+    "江城子",
+    "木兰花",
+    "声声慢",
+    "虞美人"
+   ],
+   "answer": "江城子",
+   "category": "诗词对联",
+   "official_first_is_answer": true
+  },
+  "关于对联格式以下错误的是": {
+   "question": "关于对联格式，以下错误的是",
+   "options": [
+    "必有横批",
+    "要字数相等，断句一致",
+    "要平仄相合，音调和谐",
+    "要词性相对，位置相同"
+   ],
+   "answer": "必有横批",
+   "category": "诗词对联",
+   "official_first_is_answer": true
+  },
+  "杜甫诗句故人入我梦明我长相忆君今在罗网何以有羽翼中故人是指": {
+   "question": "杜甫诗句“故人入我梦，明我长相忆。君今在罗网，何以有羽翼？”中“故人”是指",
+   "options": [
+    "李白",
+    "孟浩然",
+    "王维",
+    "王昌龄"
+   ],
+   "answer": "李白",
+   "category": "诗词对联",
+   "official_first_is_answer": true
+  },
+  "为徐敬业讨伐武则天的义兵起草了讨武氏檄的诗人是": {
+   "question": "为徐敬业讨伐武则天的义兵起草了《讨武氏檄》的诗人是",
+   "options": [
+    "骆宾王",
+    "贾岛",
+    "王之涣",
+    "孟浩然"
+   ],
+   "answer": "骆宾王",
+   "category": "诗词对联",
+   "official_first_is_answer": true
+  },
+  "诗句落花时节又逢君中的君指的是": {
+   "question": "诗句“落花时节又逢君”中的“君”指的是",
+   "options": [
+    "李龟年",
+    "杜甫",
+    "王昌龄",
+    "白居易"
+   ],
+   "answer": "李龟年",
+   "category": "诗词对联",
+   "official_first_is_answer": true
+  },
+  "娉娉袅袅余豆蔻梢头二月初括号中应填": {
+   "question": "娉娉袅袅（）余，豆蔻梢头二月初。括号中应填",
+   "options": [
+    "十三",
+    "十五",
+    "十四",
+    "十六"
+   ],
+   "answer": "十三",
+   "category": "诗词对联",
+   "official_first_is_answer": true
+  },
+  "红酥手黄滕酒满城春色宫墙柳这一首词描写的是谁的爱情故事": {
+   "question": "“红酥手，黄滕酒，满城春色宫墙柳”这一首词描写的是谁的爱情故事？",
+   "options": [
+    "陆游",
+    "柳永",
+    "白居易",
+    "黄庭坚"
+   ],
+   "answer": "陆游",
+   "category": "诗词对联",
+   "official_first_is_answer": true
+  },
+  "户枢不蠹的不蠹是什么意思": {
+   "question": "“户枢不蠹”的“不蠹”是什么意思？",
+   "options": [
+    "不生虫",
+    "不转动",
+    "不灵巧",
+    "不枯涩"
+   ],
+   "answer": "不生虫",
+   "category": "诗词对联",
+   "official_first_is_answer": true
+  },
+  "各个重要节日都有礼物给大家负责发礼物的节日礼物使者的造型是": {
+   "question": "各个重要节日都有礼物给大家，负责发礼物的节日礼物使者的造型是",
+   "options": [
+    "兔子怪",
+    "蝴蝶仙子",
+    "护卫",
+    "狂豹"
+   ],
+   "answer": "兔子怪",
+   "category": "游戏小知识",
+   "official_first_is_answer": true
+  },
+  "打开成就界面的快捷键是": {
+   "question": "打开成就界面的快捷键是",
+   "options": [
+    "Alt＋N",
+    "Alt＋W",
+    "Alt＋L",
+    "Alt＋O"
+   ],
+   "answer": "Alt＋N",
+   "category": "游戏小知识",
+   "official_first_is_answer": true
+  },
+  "合成召唤兽饰品需要以下哪种物品与特定召唤兽炼妖": {
+   "question": "合成召唤兽饰品需要以下哪种物品与特定召唤兽炼妖？",
+   "options": [
+    "圣兽丹",
+    "灵兽丹",
+    "炼兽真经",
+    "月华露"
+   ],
+   "answer": "圣兽丹",
+   "category": "游戏小知识",
+   "official_first_is_answer": true
+  },
+  "古代成语升堂入室的意思是": {
+   "question": "古代成语“升堂入室”的意思是",
+   "options": [
+    "形容学问技艺深得师传，造诣精深",
+    "形容做事有条不紊，循序渐进",
+    "形容劳苦功高",
+    "形容光天化日之下，名正言顺的抢劫"
+   ],
+   "answer": "形容学问技艺深得师传，造诣精深",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "古代成语相濡以沫出自以下哪部著作": {
+   "question": "古代成语“相濡以沫”出自以下哪部著作？",
+   "options": [
+    "《庄子》",
+    "《论语》",
+    "《孟子》",
+    "《大学》"
+   ],
+   "answer": "《庄子》",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  },
+  "古代小说常用沉鱼落雁闭月羞花形容女性之美其中落雁是指": {
+   "question": "古代小说常用“沉鱼落雁，闭月羞花”形容女性之美，其中“落雁”是指",
+   "options": [
+    "西施",
+    "杨玉环",
+    "貂蝉",
+    "王昭君"
+   ],
+   "answer": "王昭君",
+   "category": "古代常识",
+   "official_first_is_answer": false
+  },
+  "古代用沉鱼落雁闭月羞花形容女性之美其中羞花是指": {
+   "question": "古代用“沉鱼落雁，闭月羞花”形容女性之美，其中“羞花”是指",
+   "options": [
+    "貂蝉",
+    "西施",
+    "王昭君",
+    "杨玉环"
+   ],
+   "answer": "杨玉环",
+   "category": "古代常识",
+   "official_first_is_answer": false
+  },
+  "古代六艺礼乐射御书数中的乐是指": {
+   "question": "古代六艺“礼、乐、射、御、书、数”中的乐是指",
+   "options": [
+    "学习礼仪",
+    "练习武术",
+    "驾御车马",
+    "学习音乐"
+   ],
+   "answer": "学习音乐",
+   "category": "古代常识",
+   "official_first_is_answer": false
+  },
+  "峨眉山是中国佛教四大名山之一它位于哪个省": {
+   "question": "“峨眉山”是中国佛教四大名山之一，它位于哪个省",
+   "options": [
+    "四川",
+    "浙江",
+    "山西",
+    "安徽"
+   ],
+   "answer": "四川",
+   "category": "佛道礼仪",
+   "official_first_is_answer": true
+  },
+  "元始天尊是道教三清中的哪一位": {
+   "question": "元始天尊是道教“三清”中的哪一位",
+   "options": [
+    "玉清",
+    "太清",
+    "上清",
+    "晶清"
+   ],
+   "answer": "玉清",
+   "category": "佛道礼仪",
+   "official_first_is_answer": true
+  },
+  "以下中国古代乐器按常见大小计算最大的是": {
+   "question": "以下中国古代乐器，按常见大小计算，最大的是",
+   "options": [
+    "编钟",
+    "木鱼",
+    "古筝",
+    "柳琴"
+   ],
+   "answer": "编钟",
+   "category": "音律棋牌",
+   "official_first_is_answer": true
+  },
+  "清代官服上绣有方形图案称为补子其中二品武官的补子图案是": {
+   "question": "清代官服上绣有方形图案，称为“补子”，其中二品武官的补子图案是",
+   "options": [
+    "狮子",
+    "豹子",
+    "麒麟",
+    "蛟龙"
+   ],
+   "answer": "狮子",
+   "category": "古代工艺",
+   "official_first_is_answer": true
+  },
+  "盆景艺术是中国历史悠久的一种园林艺术盆景艺术五大流派包括苏派扬派徽派川派和": {
+   "question": "盆景艺术是中国历史悠久的一种园林艺术，盆景艺术五大流派包括苏派、扬派、徽派、川派和",
+   "options": [
+    "岭南派",
+    "京派",
+    "粤派",
+    "湘派"
+   ],
+   "answer": "岭南派",
+   "category": "古代工艺",
+   "official_first_is_answer": true
+  },
+  "三国时期擅长造刀的是以下哪位": {
+   "question": "三国时期擅长造刀的是以下哪位",
+   "options": [
+    "蒲元",
+    "马钧",
+    "诸葛亮",
+    "刘晔"
+   ],
+   "answer": "蒲元",
+   "category": "古代工艺",
+   "official_first_is_answer": true
+  },
+  "温泉铭是哪位帝王撰写": {
+   "question": "《温泉铭》是哪位帝王撰写？",
+   "options": [
+    "唐太宗李世民",
+    "宋徽宗赵佶",
+    "唐玄宗李隆基",
+    "宋钦宗赵恒"
+   ],
+   "answer": "唐太宗李世民",
+   "category": "书画艺术",
+   "official_first_is_answer": true
+  },
+  "得道多助失道寡助是以下哪位提出的观点": {
+   "question": "“得道多助，失道寡助”是以下哪位提出的观点？",
+   "options": [
+    "孟子",
+    "庄子",
+    "孔子",
+    "老子"
+   ],
+   "answer": "孟子",
+   "category": "书画艺术",
+   "official_first_is_answer": true
+  },
+  "中国十位名画家各有其长擅长画马的是": {
+   "question": "中国十位名画家各有其长，擅长画马的是",
+   "options": [
+    "徐悲鸿",
+    "张大千",
+    "齐白石",
+    "黄胄"
+   ],
+   "answer": "徐悲鸿",
+   "category": "书画艺术",
+   "official_first_is_answer": true
+  },
+  "古诗名句飘飘何所似天地一沙鸥的作者是": {
+   "question": "古诗名句“飘飘何所似，天地一沙鸥。”的作者是",
+   "options": [
+    "杜甫",
+    "苏轼",
+    "孟浩然",
+    "王维"
+   ],
+   "answer": "杜甫",
+   "category": "诗词对联",
+   "official_first_is_answer": true
+  },
+  "诗经中讽刺剥削者的诗是": {
+   "question": "《诗经》中讽刺剥削者的诗是",
+   "options": [
+    "《硕鼠》",
+    "《蒹葭》",
+    "《氓》",
+    "《采薇》"
+   ],
+   "answer": "《硕鼠》",
+   "category": "诗词对联",
+   "official_first_is_answer": true
+  },
+  "古诗名句松下问童子的下句是": {
+   "question": "古诗名句“松下问童子”的下句是",
+   "options": [
+    "言师采药去",
+    "复照青苔上",
+    "但闻人语响",
+    "云深不知处"
+   ],
+   "answer": "言师采药去",
+   "category": "诗词对联",
+   "official_first_is_answer": true
+  },
+  "古诗名句梅落繁枝千万片犹自多情学雪随风转作者是": {
+   "question": "古诗名句:“梅落繁枝千万片，犹自多情，学雪随风转。”作者是？",
+   "options": [
+    "冯延巳",
+    "张九龄",
+    "韩愈",
+    "李商隐"
+   ],
+   "answer": "冯延巳",
+   "category": "诗词对联",
+   "official_first_is_answer": true
+  },
+  "古时对厨师职业的人称为": {
+   "question": "古时对厨师职业的人称为",
+   "options": [
+    "庖",
+    "师",
+    "丁",
+    "保"
+   ],
+   "answer": "庖",
+   "category": "古代常识",
+   "official_first_is_answer": true
+  }
+ }
+}

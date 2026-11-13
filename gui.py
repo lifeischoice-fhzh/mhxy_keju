@@ -6,7 +6,7 @@ from tkinter import messagebox
 import bank                 # 题库子系统:只有"检查/更新题库"这条路用它
 import core                 # 地基:配置/截图/语音/引擎与键名归属表
                             # (一律 core.xxx 现取,别再拷名字过来)
-from tools import keju as tools_keju   # 收益文案(纯函数,只读)
+from tools import keju as tools_keju   # 识别事件(纯函数,只读)
 from ui import keju as ui_keju
 from ui.keju import (MINI_FONT, MINI_FONT_MIN, MINI_LABEL_MAX_W,
                      MINI_MARGIN, MINI_TOP, mute_palette)
@@ -107,6 +107,9 @@ class App:
         self.root.report_callback_exception = self._on_tk_error
         self._readonly = bool(readonly)   # 只读模式:窗口照常开,只是不能答题
         self.cfg = core.load_config()
+        # 新老配置对齐:mode 是界面/统计认的模式名,exam_mode 是识别管线认的旧键
+        self._set("mode", self._mode())
+        self._set("exam_mode", core.mode_exam(self._mode()))
         self.bank = bank.QuestionBank()
         self.last_answer = ""
         self.last_question = ""
@@ -123,7 +126,7 @@ class App:
         except Exception:
             pass
         try:
-            n = core.prune_events()    # 事件只留当天:统计口径与收益一致
+            n = core.prune_events()    # 事件只留当天:统计只看当天
             if n:
                 self.log(f"[事件]已清掉 {n} 条非当天的识别记录")
         except Exception:
@@ -141,6 +144,9 @@ class App:
         ui_keju.build(self, self.skin)
         if self._readonly:
             ui_keju.draw_readonly(self.hero_canvas, self.skin)
+        # 模式下拉:点窗内别处 / Esc 收起(展开由模式钮自己管)
+        self.root.bind("<Button-1>", self._on_root_click, add="+")
+        self.root.bind("<Escape>", lambda _e: self._close_mode_menu())
         # 主窗只有一个:摆在 build 里定好的位置,浮入并提到前面
         xy = getattr(self.root, "p_xy", None)
         pop_in(self.root, xy=xy)
@@ -175,28 +181,96 @@ class App:
             self.on_autolocate()
 
     # ---- 界面回调 ----
-    def _refresh_mode_btn(self):
-        """右上「御前科举」单按钮:文案显示当前模式,点一下切换。"""
-        try:
-            self.mode_btn.set_text(
-                "御前科举" if bool(self._get("exam_mode", True))
+    def _mode(self):
+        """当前识别模式名:新配置读 mode;只有老 exam_mode 布尔时按族推。"""
+        name = self._get("mode", "")
+        if name in core.KEJU_MODE_NAMES:
+            return name
+        return (core.DEFAULT_MODE if bool(self._get("exam_mode", True))
                 else "三大学士")
+
+    def _refresh_mode_btn(self):
+        """右上模式钮:文案=当前模式 + ▾(点开下拉切换)。"""
+        try:
+            self.mode_btn.set_text(f"{self._mode()} ▾")
         except Exception:
             pass
 
+    def _refresh_mode_menu(self):
+        """下拉面板里把当前模式标出来(✓ + 主题色),其余回普通色。"""
+        for name, btn in getattr(self, "mode_rows", []):
+            try:
+                cur = name == self._mode()
+                btn.set_text(("✓ " if cur else "") + name)
+                btn.set_palette(ui_keju.mode_row_palette(self.skin, cur))
+            except Exception:
+                pass
+
     def on_toggle_mode(self):
+        """点右上模式钮:收起/放下识别模式下拉。"""
         if getattr(self, "_readonly", False):
             return
-        self._set_exam_mode(not bool(self._get("exam_mode", True)))
+        if getattr(self, "_mode_menu_open", False):
+            self._close_mode_menu()
+        else:
+            self._open_mode_menu()
 
-    def _set_exam_mode(self, keju: bool):
-        if bool(self._get("exam_mode", True)) == keju:
+    def _open_mode_menu(self):
+        menu = getattr(self, "mode_menu", None)
+        if menu is None:
             return
-        self._set("exam_mode", keju)
+        self._refresh_mode_menu()
+        menu.place(x=ui_keju.MODE_MENU_X, y=ui_keju.MODE_MENU_Y,
+                   width=ui_keju.MODE_MENU_W, height=ui_keju.MODE_MENU_H)
+        menu.lift()
+        self._mode_menu_open = True
+
+    def _close_mode_menu(self):
+        menu = getattr(self, "mode_menu", None)
+        self._mode_menu_open = False
+        if menu is None:
+            return
+        try:
+            menu.place_forget()
+        except Exception:
+            pass
+
+    def _on_root_click(self, event):
+        """点主窗别处时收起下拉(模式钮和面板自己的点击不关)。"""
+        if not getattr(self, "_mode_menu_open", False):
+            return
+        w = event.widget
+        if w is getattr(self, "mode_btn", None):
+            return
+        menu = getattr(self, "mode_menu", None)
+        while w is not None:
+            if w is menu:
+                return
+            w = getattr(w, "master", None)
+        self._close_mode_menu()
+
+    def on_pick_mode(self, name):
+        """下拉里选中一个模式。"""
+        if getattr(self, "_readonly", False):
+            return
+        self._close_mode_menu()
+        self._set_mode(name)
+
+    def _set_mode(self, name):
+        if name not in core.KEJU_MODE_NAMES or self._mode() == name:
+            return
+        self._set("mode", name)
+        # exam_mode 是识别管线读的旧键,一直跟着模式走,别让它和 mode 打架
+        self._set("exam_mode", core.mode_exam(name))
         core.save_config(self.cfg)
         self._refresh_mode_btn()
-        self.log(f"[识别模式]{'御前科举' if keju else '三大学士'}")
-        tools_keju.record_event("mode", mode="御前科举" if keju else "三大学士")
+        self._refresh_mode_menu()
+        self.log(f"[识别模式]{name}")
+        tools_keju.record_event("mode", mode=name)
+
+    def _set_exam_mode(self, keju: bool):
+        """旧接口:只表达识别族,映射到该族的默认模式(测试/老调用用)。"""
+        self._set_mode(core.DEFAULT_MODE if keju else "三大学士")
 
     def _refresh_regions(self):
         """刷新客户端胶囊(角色名/未定位);引擎还没起来时也安全。"""
@@ -219,13 +293,15 @@ class App:
         self.log("[语音]已静音(界面照旧显示答案)"
                  if self._get("mute") else "[语音]已恢复")
 
-    def on_autolocate(self):
+    def on_autolocate(self, manual=False):
         """按窗口枚举,把每个梦幻西游客户端"整窗口"填成一条题目对话框区域。
 
         整窗口覆盖=不漏对话框;窗口移动/换分辨率/多开位置不同都能一次到位。
         (实测:整窗口 640x480 档 OCR 中位 0.30s,与只框对话框持平)
         每次都会先把旧坐标全部清掉:客户端挪过位置后,旧坐标只会误导。
         最多定位 core.MAX_CLIENTS 个客户端,多出的舍弃。
+        manual=True 是「客户端刷新」按钮的手动刷新:检测到的全是登录窗时
+        弹「请先登录角色」;启动自动定位只落日志,别一开应用就弹框。
         """
         if getattr(self, "_readonly", False):
             return    # 停用态:按钮点击一律静默丢弃(不处理、不记日志)
@@ -240,20 +316,25 @@ class App:
             self.log(f"[客户端]客户端已最小化,跳过(截不到画面): {t}")
         if not wins:
             core.save_config(self.cfg)
-            if minimized:      # 最小化时截不到画面,得让用户把窗口显示出来
+            if minimized:      # 最小化时截不到画面,窗口显示出来就自动接入
                 self.log("[客户端]客户端是最小化的,定位不到 —— "
-                         "把游戏窗口显示出来,再点一次「客户端刷新」")
+                         "把游戏窗口显示出来后会自动接入")
             else:
                 self.log("[客户端]没找到梦幻西游客户端窗口:"
-                         "确认游戏已启动,再点一次「客户端刷新」")
+                         "游戏启动并登录角色后会自动接入")
             return
-        # 只定位支持的两档(640×480 / 860×600):其它档识别慢、字也小,
-        # 跳过并弹框说明;混合时支持的照常定位
+        # 只定位支持的三档(640×480 / 800×600 / 1024×768,按画布精确判):其它档
+        # 识别慢、字也小,跳过并弹框说明;混合时支持的照常定位
         ok = [(t, b) for t, b in wins if core.client_supported(b)]
         bad = [(t, b) for t, b in wins if not core.client_supported(b)]
         if not ok:
-            self._log_unsupported(bad)
-            self._warn_resolution()
+            if bad and all(not core.client_name(t) for t, _b in bad):
+                # 全是登录窗(标题抠不出角色名,独立版/多标签版同判):
+                # 提示登录后再刷新,别拿「分辨率不支持」误导人
+                self._hint_login(len(bad), manual)
+            else:
+                self._log_unsupported(bad)
+                self._warn_resolution()
             core.save_config(self.cfg)
             return
         self._set("regions", [])
@@ -284,19 +365,21 @@ class App:
             self.log(f"[提示]不是最小分辨率 —— 游戏分辨率调成 "
                      f"{core.MIN_GAME_RES[0]}×{core.MIN_GAME_RES[1]} 效果最佳"
                      "(截图更快、字也清楚)")
-            self._hint_resolution()
         self.log("[提示]挪动客户端或改了分辨率后,会自动跟随")
         if not self.engine.keju_tool.watching:
             self.engine.set_watch(True)   # 自动监听默认开:定位到客户端就(重新)接管
-        if not bool(self._get("exam_mode", True)):
-            self.log("[提示]「三大学士」没有结构锚点,靠题库比对认题,"
-                     "「御前科举」更稳")
+        if not core.mode_exam(self._mode()):
+            self.log(f"[提示]「{self._mode()}」没有结构锚点,靠题库比对认题,"
+                     "科举会试/殿试带锚点更稳")
 
     def _log_unsupported(self, bad):
-        """逐个记一行不支持的客户端(跳过原因落在文件里,弹框只报总数)。"""
+        """逐个记一行不支持的客户端(跳过原因落在文件里,弹框只报总数)。
+
+        原因文案在 core.client_size_info 里按场景写全(分辨率不支持 /
+        未登录角色没有游戏画面),这里只补支持档。
+        """
         for _title, box in bad:
-            self.log(f"[客户端]分辨率不支持,已跳过: "
-                     f"{core.client_size_info(box)[0]}"
+            self.log(f"[客户端]{core.client_size_info(box)[0]}"
                      f"(只支持 {core.supported_res_text()})")
 
     def _warn_resolution(self):
@@ -309,15 +392,102 @@ class App:
             f"目前只支持 {core.supported_res_text()} 分辨率,"
             f"{core.MIN_GAME_RES[0]}×{core.MIN_GAME_RES[1]} 效果最佳")
 
-    def _hint_resolution(self):
-        """定位到了非最小档的支持客户端(如 800×600):弹框建议调最小档。
+    def on_refresh_clients(self):
+        """「客户端刷新」按钮:手动刷新(全是登录窗时弹「请先登录角色」)。"""
+        self.on_autolocate(manual=True)
 
-        能用,但最小分辨率效果更佳 —— 文案用户定的,一句话就好。
+    def _hint_login(self, count, manual):
+        """检测到的客户端全是登录窗:提示登录角色后再刷新。
+
+        独立窗口版和多标签版的登录窗都靠「标题抠不出角色名」认出来
+        (见 core.find_client_canvases 的登录闸)。手动点「客户端刷新」
+        才弹框;启动时的自动定位只落日志,别一开应用就弹框。
         """
-        messagebox.showinfo(
-            "分辨率建议",
-            f"建议使用最小分辨率 {core.MIN_GAME_RES[0]}×{core.MIN_GAME_RES[1]}"
-            ",效果更佳")
+        self.log(f"[客户端]检测到 {count} 个登录窗口:"
+                 "请登录角色后再点「客户端刷新」")
+        if manual:
+            messagebox.showinfo("请先登录角色",
+                                "请先登录角色,登录后再点「客户端刷新」")
+
+    def on_client_hover_start(self, i):
+        """鼠标悬停角色名框:浮出该角色的游戏分辨率小条。
+
+        按**角色名**现场匹配(标题实时解析,与窗口位置无关 —— 拖动窗口后
+        定位时的区域框会过期,名字不会);没跟踪到名字的槽位退回区域框
+        匹配;都查不到(确实退回登录界面)就地写明,不弹框。
+        """
+        names = []
+        if getattr(self, "engine", None) is not None:
+            try:
+                names = self.engine.keju_tool.ui_state().get("names") or []
+            except Exception:
+                names = []
+        name = names[i] if i < len(names) else None
+        if name:
+            for title, res, _rect, _ratio, _mode in \
+                    core.find_client_canvases()[0]:
+                if core.client_name(title) == name:
+                    self._hover_tip(i, f"{res[0]}×{res[1]}")
+                    return
+            self._hover_tip(i, "未登录角色,没有游戏画面")
+            return
+        regions = [r for r in (self._get("regions") or []) if r]
+        if i >= len(regions):
+            self._hover_tip(i, "未定位")
+            return
+        canvas = core.client_canvas([int(v) for v in regions[i]])
+        if canvas:
+            res = canvas[1]
+            self._hover_tip(i, f"{res[0]}×{res[1]}")
+        else:
+            self._hover_tip(i, "未登录角色,没有游戏画面")
+
+    def on_client_hover_end(self, _i=0):
+        tip = getattr(self, "_client_tip", None)
+        if tip is not None:
+            tip.destroy()
+            self._client_tip = None
+
+    def _hover_tip(self, slot, text):
+        """悬停小条:角色名框**上方**浮出,圆角+描边与右侧按钮同款(ghost 色)。
+
+        Tk 窗口画不出真圆角,四角用透明色抠掉(Windows 的
+        -transparentcolor,应用只跑 Windows);宽度按文案实测自适应
+        (tkfont 量宽),重建比改字稳 —— 文案长短不一,画布裁字。
+        """
+        import tkinter as tk
+        from tkinter import font as tkfont
+        self.on_client_hover_end()          # 先收旧的:宽度要跟着文案重算
+        th = ui_keju.SKINS[getattr(self, "skin", "dark")]
+        pal = ui_keju.tip_palette(getattr(self, "skin", "dark"))
+        key = "#010101" if th["bg"] != "#010101" else "#020202"
+        tip = tk.Toplevel(self.root)
+        try:
+            tip.wm_overrideredirect(True)   # 无边框小条
+            tip.wm_attributes("-topmost", True)
+            tip.wm_attributes("-transparentcolor", key)
+        except Exception:
+            pass
+        tip.configure(bg=key)
+        text_w = int(tkfont.Font(root=self.root, font=pal["font"]).measure(text))
+        w, h = max(72, text_w + 26), 30
+        cv = tk.Canvas(tip, width=w, height=h, highlightthickness=0, bg=key)
+        cv.pack()
+        cv.create_polygon(
+            ui_keju.round_pts(1, 1, w - 1, h - 1, th["btn_r"]),
+            smooth=True, fill=pal["bg"], outline=th["row_line"], width=1)
+        tid = cv.create_text(w / 2, h / 2, text=text, font=pal["font"],
+                             fill=pal["fg"], anchor="c")
+        bb = cv.bbox(tid)
+        if bb:
+            cv.move(tid, 0, h / 2 - (bb[1] + bb[3]) / 2)
+        tip.tip_cv, tip.tip_tid = cv, tid
+        self._client_tip = tip
+        caps = getattr(self, "client_capsules", [])
+        if slot < len(caps):
+            cv0 = caps[slot]
+            tip.wm_geometry(f"+{cv0.winfo_rootx()}"
+                            f"+{cv0.winfo_rooty() - h - 6}")
 
     def _forget_region_memory(self):
         """清掉各区域记住的上一题/画面指纹(区域变了,旧记忆作废)。"""
@@ -329,27 +499,6 @@ class App:
         self.engine.keju_tool.set_auto_boxes(None)   # 清空了就不再跟随客户端
         self._forget_region_memory()
         self._refresh_regions()
-
-    def on_remove_client(self, i):
-        """胶囊上的 ×:把第 i 个客户端从定位里删掉,其余整体前移一位。
-
-        区域、跟随基准(自动定位当时的矩形)和角色名一起去掉;被删那格的
-        画面/题目记忆也作废。跟随基准比窗口枚举少了的话就不再自动跟随
-        (can_follow_clients 要求数量一致),重新点「客户端刷新」即可。
-        """
-        if getattr(self, "_readonly", False):
-            return
-        regions = ((self._get("regions") or [])
-                   + [None] * core.MAX_CLIENTS)
-        if not regions[i]:
-            return
-        self.engine.keju_tool.drop_client(i)   # 先动工具:它按旧配置数下标
-        kept = [list(r) for j, r in enumerate(regions) if r and j != i]
-        self._set("regions", kept + [None] * (core.MAX_CLIENTS - len(kept)))
-        core.save_config(self.cfg)
-        self._refresh_regions()
-        self.log(f"[客户端]已移除客户端{i + 1},其余保持不变;"
-                 "要重新全量定位就点「客户端刷新」")
 
     def on_manual_scan(self):
         """手动识别:立刻投递一次识别任务(不受自动监听开关限制)。"""
@@ -421,11 +570,6 @@ class App:
         import threading as _th
         _th.Thread(target=self._bank_update_worker, args=(today,),
                    daemon=True).start()
-
-    def on_test_tts(self):
-        if getattr(self, "_readonly", False):
-            return
-        self.speaker.say(core.SAY_TTS_TEST)
 
     def on_mini(self):
         """缩成小窗置顶,不遮挡游戏;大号字显示最近答案。"""
@@ -671,7 +815,7 @@ class App:
         """预检不过(启动传入或运行中跨线):停识别播报,识别区常驻提示。
 
         窗口不关:用户还能看到发生了什么,换肤这类纯界面操作照常,答题
-        相关的路(引擎/监听/手动识别/试听/定位)全部不通。
+        相关的路(引擎/监听/手动识别/定位/模式切换)全部不通。
         """
         if getattr(self, "_readonly", False):
             return

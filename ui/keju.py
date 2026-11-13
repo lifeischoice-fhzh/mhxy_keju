@@ -17,8 +17,16 @@ WIN_W, WIN_H = 664, 232
 SIDE_W = 170                        # 左栏宽
 BOX_W, BOX_H = 146, 30              # 角色名框 / 客户端刷新按钮(同宽对齐)
 BOX_STEP = 36                       # 竖排步进(框高 30 + 间距 6)
-BTN_W, BTN_H, BTN_STEP = 88, 32, 94  # 右上操作钮:宽/高/步进
+BTN_W, BTN_H = 110, 36            # 右上操作钮:等宽大钮,4 颗正好铺满右区
 MAIN_X = 182                        # 右区起始 x(左栏 170 + 12 间距)
+MODE_MENU_X, MODE_MENU_Y = MAIN_X, 50
+MODE_MENU_W = 160                   # 模式下拉面板:压在题目卡左上角
+MODE_ROW_H, MODE_ROW_GAP = 28, 2
+MODE_MENU_PAD = 6
+MODE_MENU_H = (MODE_MENU_PAD * 2
+               + len(core.KEJU_MODES) * (MODE_ROW_H + MODE_ROW_GAP)
+               - MODE_ROW_GAP)
+MODE_HINT = "点上方模式按钮可切换模式"
 YH = "Microsoft YaHei UI"
 Q_FONT = (YH, 13)
 A_FONT = (YH, 36, "bold")
@@ -28,7 +36,7 @@ SKINS = {
     "dark": {   # 玄夜:近黑蓝底 + 翡翠绿
         "bg": "#10141b", "panel": "#151a23", "card": "#151a23",
         "line": "#232b38", "row": "#1b212c", "row_line": "#39455a",
-        "name": "#dfe5ee", "x": "#5f6b80", "x_hover": "#e5484d",
+        "name": "#dfe5ee",
         "txt": "#eef2f8", "sub": "#8b96a8",
         "primary": {"bg": "#34b07c", "hover": "#3bc28a", "press": "#2b9a6d",
                     "fg": "#0c1712"},
@@ -44,7 +52,7 @@ SKINS = {
     "light": {  # 玄白:白纸黑字强对比
         "bg": "#ffffff", "panel": "#f5f5f2", "card": "#ffffff",
         "line": "#e6e6e0", "row": "#ffffff", "row_line": "#c8c8bd",
-        "name": "#141414", "x": "#b5b5ae", "x_hover": "#e5484d",
+        "name": "#141414",
         "txt": "#141414", "sub": "#8a8a84",
         "primary": {"bg": "#141414", "hover": "#333333", "press": "#000000",
                     "fg": "#ffffff"},
@@ -71,6 +79,16 @@ def _btn_pal(colors, font_size):
 def mute_palette(skin, muted):
     """静音钮的调色板:静音 = 红色系提醒,未静音 = 普通 ghost。"""
     return _btn_pal(SKINS[skin]["mute" if muted else "ghost"], 10)
+
+
+def tip_palette(skin):
+    """悬停分辨率小条的调色板:ghost 同款,与右侧按钮样式一致。"""
+    return _btn_pal(SKINS[skin]["ghost"], 10)
+
+
+def mode_row_palette(skin, selected):
+    """模式下拉里的一行:当前模式用主题色,其余 ghost。"""
+    return _btn_pal(SKINS[skin]["primary" if selected else "ghost"], 11)
 
 
 def _draw_zhuangyuan(d):
@@ -246,7 +264,7 @@ def build(app, skin="dark"):
     ui_widgets.set_place(app.root, size=(WIN_W, WIN_H))
     app.root.configure(bg=th["bg"])
 
-    # 左栏:角色名竖排(× 删单个)+ 客户端刷新(替代原定位按钮)
+    # 左栏:角色名竖排 + 客户端刷新(替代原定位按钮)
     side = tk.Frame(app.root, width=SIDE_W, height=WIN_H, bg=th["panel"],
                     highlightthickness=0)
     side.place(x=0, y=0, width=SIDE_W, height=WIN_H)  # 显式定高:刷新钮才会露出
@@ -257,7 +275,7 @@ def build(app, skin="dark"):
         cv.grid(row=i, column=0, padx=(12, 12), pady=(12 if i == 0 else 0, 6))
         app.client_capsules.append(cv)
     app.refresh_btn = TextButton(
-        side, "客户端刷新", app.on_autolocate,
+        side, "客户端刷新", app.on_refresh_clients,
         palette=_btn_pal(th["primary"], 10), width=BOX_W, height=BOX_H,
         radius=th["btn_r"], bg=th["panel"])
     app.refresh_btn.place(x=12, y=12 + core.MAX_CLIENTS * BOX_STEP)
@@ -267,23 +285,26 @@ def build(app, skin="dark"):
     app.side_ph.place(x=12, y=18)
     app._refresh_regions()
 
-    # 右上:操作按钮依次排开(御前科举 = 模式切换钮,点一下切换)
-    pal_p = _btn_pal(th["primary"], 10)
-    pal_g = _btn_pal(th["ghost"], 10)
-    app.mode_btn = TextButton(app.root, "御前科举", app.on_toggle_mode,
-                              palette=pal_p)
-    app.mode_btn.place(x=MAIN_X, y=12)
+    # 右上:操作按钮依次排开(模式钮 = 当前模式 + ▾,点开下拉切模式)
+    pal_p = _btn_pal(th["primary"], 11)
+    pal_g = _btn_pal(th["ghost"], 11)
+    app.mode_btn = TextButton(app.root, "模式", app.on_toggle_mode,
+                              palette=pal_p, width=BTN_W, height=BTN_H,
+                              radius=th["btn_r"])
     app.manual_btn = TextButton(app.root, "手动识别", app.on_manual_scan,
-                                palette=pal_g)
+                                palette=pal_g, width=BTN_W, height=BTN_H,
+                                radius=th["btn_r"])
     app.mini_btn = TextButton(app.root, "迷你置顶", app.on_mini,
-                              palette=pal_g)
-    app.tts_btn = TextButton(app.root, "播报试听", app.on_test_tts,
-                             palette=pal_g)
+                              palette=pal_g, width=BTN_W, height=BTN_H,
+                              radius=th["btn_r"])
     app.mute_btn = TextButton(app.root, "语音静音", app.on_toggle_mute,
-                              palette=pal_g)
-    for k, btn in enumerate((app.manual_btn, app.mini_btn, app.tts_btn,
-                             app.mute_btn)):
-        btn.place(x=MAIN_X + (k + 1) * BTN_STEP, y=12)
+                              palette=pal_g, width=BTN_W, height=BTN_H,
+                              radius=th["btn_r"])
+    # 4 颗钮在右区(MAIN_X ~ 窗右留 12)等间距平铺:110×36,间距 10
+    btns = (app.mode_btn, app.manual_btn, app.mini_btn, app.mute_btn)
+    span = (WIN_W - 12 - MAIN_X - BTN_W) / (len(btns) - 1)
+    for k, btn in enumerate(btns):
+        btn.place(x=int(MAIN_X + k * span), y=10)
     app._refresh_mode_btn()
     app._refresh_mute_btn()
 
@@ -302,6 +323,38 @@ def build(app, skin="dark"):
         radius=7, bg=th["card"])
     app.skin_btn.place(x=572, y=58)
     draw_hero(app.hero_canvas, "", "", skin)
+    # 题目卡左上角的引导:点一下也能直接开模式下拉
+    app.hero_canvas.tag_bind("mode_hint", "<Button-1>",
+                             lambda _e: app.on_toggle_mode())
+    build_mode_menu(app, skin)
+    app._refresh_mode_btn()
+    app._refresh_mode_menu()
+
+
+def build_mode_menu(app, skin):
+    """模式下拉面板:默认藏着,点模式钮才放下(app.on_toggle_mode)。
+
+    行是圆角钮(和别处一致),当前模式由 app._refresh_mode_menu 上主题色。
+    """
+    import tkinter as tk
+
+    th = SKINS[skin]
+    panel = tk.Frame(app.root, bg=th["line"], highlightthickness=0)
+    inner = tk.Frame(panel, bg=th["card"], highlightthickness=0)
+    inner.pack(fill="both", expand=True, padx=1, pady=1)
+    app.mode_rows = []
+    for i, name in enumerate(core.KEJU_MODE_NAMES):
+        btn = TextButton(
+            inner, name, lambda n=name: app.on_pick_mode(n),
+            palette=mode_row_palette(skin, False),
+            width=MODE_MENU_W - 2 * MODE_MENU_PAD, height=MODE_ROW_H,
+            radius=th["row_r"], bg=th["card"])
+        btn.place(x=MODE_MENU_PAD,
+                  y=MODE_MENU_PAD + i * (MODE_ROW_H + MODE_ROW_GAP))
+        app.mode_rows.append((name, btn))
+    panel.place_forget()
+    app.mode_menu = panel
+    app._mode_menu_open = False
 
 
 def fit_text(text, font, maxw):
@@ -324,6 +377,9 @@ def draw_hero(cv, question, answer, skin="dark"):
     w, h = int(cv["width"]), int(cv["height"])
     cv.create_polygon(round_pts(1, 1, w - 1, h - 1, th["card_r"]), smooth=True,
                       fill=th["card"], outline=th["line"], width=1)
+    # 模式引导常驻:很多用户不知道右上那颗钮是能点的
+    cv.create_text(24, 15, text=MODE_HINT, font=(YH, 9), fill=th["sub"],
+                   anchor="w", tags="mode_hint")
     if not question and not answer:
         cx, gy = w / 2, h / 2 - 60
         cv.create_polygon(round_pts(cx - 21, gy, cx + 21, gy + 54, 6),
@@ -416,8 +472,8 @@ def build_mini(app):
     app.mini = m
 
 
-def _draw_capsule(cv, i, name, on_remove, th):
-    """重画第 i 个角色名框(只画已定位的):全名 + × 删除(悬停变红)。
+def _draw_capsule(cv, i, name, th):
+    """重画第 i 个角色名框(只画已定位的):全名,无按钮。
 
     多边形内缩 1px:贴边画的描边下半像素会被画布裁掉(下边框消失);
     文字按 bbox 实测垂直居中 —— 中文字形在行框里偏上,固定偏移猜不准。
@@ -435,15 +491,6 @@ def _draw_capsule(cv, i, name, on_remove, th):
     label = (name or f"客户端{i + 1}")[:6]
     _vcenter(cv.create_text(12, h // 2, text=label, font=(YH, 10),
                             fill=th["name"], tags="name", anchor="w"))
-    _vcenter(cv.create_text(w - 12, h // 2, text="×", font=(YH, 12, "bold"),
-                            fill=th["x"], tags="x", anchor="c"))
-    cv.tag_bind("x", "<Button-1>", on_remove)
-    cv.tag_bind("x", "<Enter>",
-                lambda _e: (cv.configure(cursor="hand2"),
-                            cv.itemconfig("x", fill=th["x_hover"])))
-    cv.tag_bind("x", "<Leave>",
-                lambda _e: (cv.configure(cursor=""),
-                            cv.itemconfig("x", fill=th["x"])))
 
 
 def draw_side_ph(cv, th):
@@ -461,16 +508,15 @@ def draw_side_ph(cv, th):
                        fill=th["ph_line"], width=2, capstyle="round")
     cv.create_text(cx, 72, text="未找到客户端", font=(YH, 10, "bold"),
                    fill=th["ph_text"])
-    cv.create_text(cx, 90, text="启动游戏后点下方按钮", font=(YH, 8),
+    cv.create_text(cx, 90, text="启动游戏后自动接入", font=(YH, 8),
                    fill=th["ph_sub"], tags="ph")
 
 
 def refresh_capsules(app, regions, names):
     """App 调:定位到几个客户端就画几个名字框(最多 MAX_CLIENTS)。
 
-    一个都没有时名字框全藏,显示左栏占位图。区域列表在删除/跟随/自动定位
-    后始终是"非空前缀",所以数量 = 非空个数。只画不改状态;× 的点击回调
-    指向 app.on_remove_client(i)。
+    一个都没有时名字框全藏,显示左栏占位图。区域列表在跟随/自动定位
+    后始终是"非空前缀",所以数量 = 非空个数。只画不改状态。
     """
     th = SKINS[getattr(app, "skin", "dark")]
     regions = list(regions or []) + [None] * core.MAX_CLIENTS
@@ -493,5 +539,7 @@ def refresh_capsules(app, regions, names):
             continue
         cv.grid()
         name = names[i] if i < len(names or []) else None
-        _draw_capsule(cv, i, name,
-                      lambda _e, i=i: app.on_remove_client(i), th)
+        _draw_capsule(cv, i, name, th)
+        # 悬停角色名框 = 浮出该角色的游戏画面分辨率(行为在 app.on_client_hover_*)
+        cv.bind("<Enter>", lambda _e, i=i: app.on_client_hover_start(i))
+        cv.bind("<Leave>", lambda _e, i=i: app.on_client_hover_end(i))
