@@ -643,6 +643,14 @@ def sec_options():
                                          "关汉卿的《实娥冤》")
               and not tools_keju._opt_hit_strict(normalize("长沙马王堆"),
                                                  "海昏侯墓"))
+        check("一字档:替换(秤砣→秤碗)/增删(金瓶掣签→金瓶签)都算同选项,"
+              "两字差异(花妖/蜃气妖)不算",
+              tools_keju._opt_hit_strict(normalize("秤砣"), "秤碗")
+              and tools_keju._opt_hit_strict(normalize("金瓶掣签"), "金瓶签")
+              and not tools_keju._opt_hit_strict(normalize("花妖"), "蜃气妖"))
+        check("一字档:选项分隔长横线读成「一一」(巳──蛇→已一一蛇)算同选项",
+              tools_keju._opt_hit_strict(normalize("巳——蛇"), "已一一蛇")
+              and tools_keju._opt_hit_strict(normalize("一元复始"), "一元复始"))
 
         # 哨兵端到端:答案不在当屏选项 -> 压住不播报,但选项照常入库
         sbank = make_bank(os.path.join(sb.dir, "sentinel_bank.json"), [

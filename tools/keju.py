@@ -450,29 +450,47 @@ def split_options_markers(text: str) -> list:
     return segs if len(segs) >= 3 else []
 
 
+def _opt_side(s: str) -> str:
+    """选项比对侧的清理:压掉"一一"连跑。
+
+    游戏选项里的分隔长横线"──",OCR 稳定读成两个"一"(2026-11-15 金兜兕
+    实测:巳──蛇 读成 已一一蛇;题库答案「巳——蛇」的长横线倒是会被
+    core.normalize 当标点剥掉),两边永远差一截,整题被压答。单发"一"
+    是正字(一元复始),不动。
+    """
+    return re.sub(r"一{2,}", "", s) if "一" in s else s
+
+
 def _option_hit(answer_norm: str, option: str) -> bool:
     """答案是否(近似)就是这条选项。
 
     数值答案只认完全一致("200"对"20"/"0"的前缀包含是假命中,会把
-    选项窗口选错);文字答案允许包含关系(被包含侧 >= 2 字);再放一档
-    近似:两侧都 >= 4 字且相似度 >= 80(pick_with_options 同线)也算 ——
-    OCR 会把选项里的字读错(2026-11-15 车迟斗法实测:《窦娥冤》读成
-    《实娥冤》,一字之差包含关系接不住,哨兵把题库正确答案压了)。
+    选项窗口选错);文字答案依次放三档 —— 包含关系(被包含侧 >= 2 字)、
+    **一字之差**(替换或增删一格:两侧长度差 <=1 且编辑距离 <=1)、
+    长串近似(>= 4 字相似度 >= 80)。一字档是 OCR 的常态误读:2026-11-15
+    车迟斗法《窦娥冤》读成《实娥冤》、金兜兕「秤砣」读成「秤碗」、
+    「金瓶掣签」丢成「金瓶签」,连包含都接不住,哨兵把题库正确答案
+    一个个压了。
     """
     import core
     from rapidfuzz import fuzz
+    from rapidfuzz.distance import Levenshtein
 
-    onorm = core.normalize(option)
+    onorm = _opt_side(core.normalize(option))
+    anorm = _opt_side(answer_norm)
     if not onorm:
         return False
-    if onorm == answer_norm:
+    if onorm == anorm:
         return True
-    if onorm.isdigit() or answer_norm.isdigit():
+    if onorm.isdigit() or anorm.isdigit():
         return False
-    short, long = sorted((onorm, answer_norm), key=len)
+    short, long = sorted((onorm, anorm), key=len)
     if len(short) >= 2 and short in long:
         return True
-    return len(short) >= 4 and fuzz.ratio(onorm, answer_norm) >= 80
+    if (len(short) >= 2 and abs(len(onorm) - len(anorm)) <= 1
+            and Levenshtein.distance(onorm, anorm, score_cutoff=2) <= 1):
+        return True
+    return len(short) >= 4 and fuzz.ratio(onorm, anorm) >= 80
 
 
 def _opt_hit_strict(ans_norm: str, option: str) -> bool:
