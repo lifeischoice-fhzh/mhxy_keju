@@ -451,12 +451,16 @@ def split_options_markers(text: str) -> list:
 
 
 def _option_hit(answer_norm: str, option: str) -> bool:
-    """采集定位用:答案是否(近似)就是这条选项。
+    """答案是否(近似)就是这条选项。
 
     数值答案只认完全一致("200"对"20"/"0"的前缀包含是假命中,会把
-    选项窗口选错);文字答案允许包含关系(被包含侧 >= 2 字)。
+    选项窗口选错);文字答案允许包含关系(被包含侧 >= 2 字);再放一档
+    近似:两侧都 >= 4 字且相似度 >= 80(pick_with_options 同线)也算 ——
+    OCR 会把选项里的字读错(2026-11-15 车迟斗法实测:《窦娥冤》读成
+    《实娥冤》,一字之差包含关系接不住,哨兵把题库正确答案压了)。
     """
     import core
+    from rapidfuzz import fuzz
 
     onorm = core.normalize(option)
     if not onorm:
@@ -466,7 +470,9 @@ def _option_hit(answer_norm: str, option: str) -> bool:
     if onorm.isdigit() or answer_norm.isdigit():
         return False
     short, long = sorted((onorm, answer_norm), key=len)
-    return len(short) >= 2 and short in long
+    if len(short) >= 2 and short in long:
+        return True
+    return len(short) >= 4 and fuzz.ratio(onorm, answer_norm) >= 80
 
 
 def _opt_hit_strict(ans_norm: str, option: str) -> bool:
@@ -485,20 +491,38 @@ def option_lines(rblocks, qwin):
     先按编号标记(A./①)切,切不出再按"题干外的短行"取,行首的
     "A "/"B."编号前缀一并剥掉 —— 哨兵不能像 parse_options 那样拿
     答案当门槛:答案不在场恰恰是要报警的时候,门槛会把警报一起吞掉。
+
+    候选块先按对话框几何过一道:选项一定跟在题干正下方、同一竖列;
+    题干上方(NPC 名牌)和斜右侧(任务追踪 HUD)的短行一概不算 ——
+    2026-11-15 车迟斗法实测:OCR 漏读真选项的那两拍,追踪 HUD 的短行
+    凑满 3 条,把题库里的正确答案「浙江」误压了。题干窗口没拿到
+    (qwin 空,脏读整段硬配的路径)没有几何参考,宁可不压:返回空。
     """
     import core
     import re
 
     qwin_set = set(qwin or [])
-    rest = [b.get("text", "").strip() for i, b in enumerate(rblocks)
-            if i not in qwin_set and b.get("text", "").strip()]
+    rest = {i: (b.get("text") or "").strip()
+            for i, b in enumerate(rblocks)
+            if i not in qwin_set and (b.get("text") or "").strip()}
     if not rest:
         return []
-    segs = split_options_markers(" ".join(rest))
+    qs = [rblocks[i] for i in qwin_set if 0 <= i < len(rblocks)]
+    if not qs:
+        return []
+    qx1 = min(b["x1"] for b in qs)
+    qy1 = min(b["y1"] for b in qs)
+    qx2 = max(b["x2"] for b in qs)
+    rest = {i: t for i, t in rest.items()
+            if rblocks[i]["y1"] >= qy1
+            and rblocks[i]["x1"] <= qx2 and rblocks[i]["x2"] >= qx1}
+    if not rest:
+        return []
+    segs = split_options_markers(" ".join(rest.values()))
     if segs:
         return segs
     lines = []
-    for t in rest:
+    for t in rest.values():
         t = re.sub(r"^[Ａ-Ｄa-dA-D](?:\s*[.．、:：]|\s+)", "", t).strip()
         if 1 <= len(core.normalize(t)) <= 24:
             lines.append(t)
@@ -660,7 +684,14 @@ class KejuTool(threading.Thread):
         # 区域接过来,自动跟随不断线)
         boxes = [list(r) for r in (self.cfg("regions") or []) if r]
         self._auto_boxes = boxes or None
+        # 各槽位的无锚点扫描区:画布 × DLG_RATIOS(隔壁定稿比例,见
+        # _sync_scan_rects);空槽位/没同步到的拍退回整窗比例带
+        self._scan_rects: list = []
         self._client_names: list = []   # 各槽位的角色名(抠自窗口标题,见 set_auto_boxes)
+        # 分辨率不支持而暂停观测的角色(界面红名显示;改回支持档自动恢复)
+        self._unsup: list = []
+        # 观测满员被丢弃的客户端名(记一次日志;槽位空出自动接入并摘标)
+        self._dropped: list = []
         # 空手等待旗:一个客户端都没跟到时(启动没开游戏/全退出登录/全被关闭)
         # 挂着,跟随周期检测到登录角色的支持客户端就自动定位收编
         self._readopt = True
@@ -732,6 +763,34 @@ class KejuTool(threading.Thread):
         self._client_names = (names + [None] * core.MAX_CLIENTS
                               )[:core.MAX_CLIENTS]
 
+    def _sync_scan_rects(self, found):
+        """各槽位的无锚点扫描区:画布 × DLG_RATIOS(隔壁降妖伏魔的定稿比例表)。
+
+        found 是跟随周期枚举出的支持客户端 (标题, 窗口矩形) 列表,按窗口
+        矩形对回槽位。对话框是**固定像素大小**的游戏 UI,贴在画布哪里按
+        游戏设置分辨率查表(640×480/800×600/1024×768 一档一套,真机画框
+        定稿)—— 比"整窗 × PLAIN_BAND"紧得多,任务追踪栏/NPC 名牌/聊天
+        从源头就进不来(2026-11-15 车迟斗法实测:HUD 短行曾凑成"当屏选项"
+        把题库正确答案误压,几何过滤只是补救,这个才是根治)。拿不到画布
+        的槽位置 None,cycle 那拍退回整窗比例带 —— 正常到不了:槽位本身
+        就是配到画布的支持客户端。
+        """
+        import core
+        rects = [None] * core.MAX_CLIENTS
+        for t, b in found[:core.MAX_CLIENTS]:
+            canvas = core.client_canvas(b, t)
+            if canvas is None:
+                continue
+            rect = core.dialog_rect(canvas[0], canvas[1])
+            if rect is None:
+                continue
+            try:
+                i = self._auto_boxes.index([int(v) for v in b])
+            except (ValueError, AttributeError):
+                continue
+            rects[i] = rect
+        self._scan_rects = rects
+
     # ---- 自己的配置 ----
     def cfg(self, key, default=None):
         """自己的配置只在 keju 分区取。"""
@@ -739,8 +798,68 @@ class KejuTool(threading.Thread):
 
     # ---- 只读状态口:gui 只认这个口,不摸下面的字段 ----
     def ui_state(self):
-        """界面刷新要的只读快照:各槽位的角色名(客户端胶囊显示用)。"""
-        return {"names": list(self._client_names)}
+        """界面刷新要的只读快照:各槽位的角色名 + 暂停观测(红名)名单。
+
+        暂停观测的客户端并进同一排槽位显示(排在已定位的后面),列表
+        `unsup` 里的名字界面画红色、悬停显示「分辨率不支持」。
+        """
+        names = list(self._client_names)
+        unsup = list(self._unsup)
+        free = [k for k, n in enumerate(names) if not n]
+        for k, n in enumerate(unsup):
+            if k < len(free):
+                names[free[k]] = n
+        return {"names": names, "unsup": unsup}
+
+    def set_unsup(self, names):
+        """整体替换「分辨率不支持、暂停观测」名单(启动自动定位/清空用)。"""
+        out = []
+        for n in (names or []):
+            n = str(n)
+            if n and n not in out:
+                out.append(n)
+        self._unsup = out
+
+    def _unsup_reconcile(self, raw):
+        """红名/满员丢弃名单里窗口没了的(关掉/退出登录):静默摘掉。"""
+        import core
+        live = {core.client_name(t) for t, _b in raw}
+        self._unsup = [n for n in self._unsup if n in live]
+        self._dropped = [n for n in self._dropped if n in live]
+
+    def _unsup_mark(self, raw):
+        """「名字在、配到本尊画布、但档位不支持」的窗口记红名;首次记才落日志。
+
+        不依赖槽位认领 —— 空手等待期、没排进观测槽的 HD 窗口都照记。
+        **配不到画布不下结论**:登录/loading 中标题先于画布出现,那一拍
+        "有名字没画布"只是还不知道档位,标了就是误报(2026-11-13 用户
+        实测:独立窗口版登录瞬间被全量误标)。
+        """
+        import core
+        for t, b in raw:
+            name = core.client_name(t)
+            if not name or name in self._unsup or core.client_supported(b, t):
+                continue
+            canvas = core.client_canvas(b, t)
+            if canvas is None:
+                continue
+            self._unsup.append(name)
+            self.app.log(f"[客户端]{name}({canvas[1][0]}×{canvas[1][1]})"
+                         "分辨率不支持,已暂停观测(改回支持档自动恢复)")
+
+    def _unsup_heal(self, raw):
+        """暂停观测的窗口回到支持档:摘红名并记一声(每拍自检,防误标滞留)。"""
+        import core
+        for name in list(self._unsup):
+            for t, b in raw:
+                if (core.client_name(t) != name
+                        or not core.client_supported(b, t)):
+                    continue
+                canvas = core.client_canvas(b, t)
+                size = (f"{canvas[1][0]}×{canvas[1][1]}" if canvas else "")
+                self._unsup.remove(name)
+                self.app.log(f"[客户端]{name}({size})分辨率已恢复,继续观测")
+                break
 
     def _run_pending(self) -> bool:
         """有待办就办掉:目前只有手动识别一种,办过事返回 True。
@@ -898,6 +1017,37 @@ class KejuTool(threading.Thread):
             return ""
         return " ".join(b.get("text", "") for b in blocks)
 
+    def _rescan_olines(self, base, qbox):
+        """压答前的窄带复检:只截题干正下方一条,再给 OCR 一次机会。
+
+        选项行会被整框 OCR 整行漏检,漏的常恰好是答案那一行(2026-11-15
+        车迟斗法实测:素纱襌衣题「长沙马王堆」那行两拍都没读出,题库答案
+        不在"当屏选项"里被压)。题干上方的东西(NPC 名牌)按构造就不在
+        图里,右侧追踪栏也大半被裁掉。base 是本轮识别用的那个矩形(画布框
+        或整窗比例带),块坐标都以它为基准。det 的输入下限取 max(736, 窄带
+        长边):小条只会被放大,不会像整框那样缩水。读不了返回 None,
+        哨兵按原判压答。
+        """
+        bx1, by1, bx2, by2 = base
+        qx1, qy1, qx2, qy2 = qbox
+        top = by1 + qy2
+        strip = (bx1 + qx1, top, bx1 + qx2 + (qx2 - qx1) // 2 + 40,
+                 min(by2, top + max(80, (qy2 - qy1) * 8)))
+        try:
+            crop = self.screen.grab(strip)
+            blocks = self.ocr.recognize_blocks(
+                crop, limit_side=max(736, strip[2] - strip[0],
+                                     strip[3] - strip[1]))
+        except Exception:
+            return None
+        import core
+        lines = []
+        for b in blocks:
+            t = (b.get("text") or "").strip()
+            if 1 <= len(core.normalize(t)) <= 24:
+                lines.append(t)
+        return lines
+
     def _learn_options(self, entry, rblocks, qwin, mode_name, olines=None):
         """答题成功后把当屏选项回写选项仓库(data/keju_options.json)。
 
@@ -1018,7 +1168,8 @@ class KejuTool(threading.Thread):
                 if await_relogin:
                     olog("等待游戏客户端登录角色,检测到后自动开始识别")
                 else:
-                    olog("还没有定位到客户端 —— 点「客户端刷新」定位后再识别")
+                    olog("还没有定位到客户端 —— "
+                         "检测到登录角色的客户端后会自动开始识别")
             if self.watching and not await_relogin:
                 self.watching = False
                 olog("没有定位到客户端,已暂停(定位后自动接管)")
@@ -1038,10 +1189,20 @@ class KejuTool(threading.Thread):
             if recheck:
                 self._region_recheck.pop(key, None)
             try:
-                # 无锚点的模式(三大学士/金兜兕/车迟斗法)只扫底部对话框带
-                # (整窗其余全是噪声);科举三试整窗扫
-                crop = self.screen.grab(region if exam_mode
-                                        else plain_band(x1, y1, x2, y2))
+                # 无锚点的模式(三大学士/金兜兕/车迟斗法)只扫对话框:
+                # 画布 × DLG_RATIOS(隔壁定稿比例,跟随每拍同步,见
+                # _sync_scan_rects;画布没配到的槽位退回整窗比例带);
+                # 科举三试整窗扫
+                scan = None
+                if not exam_mode:
+                    for i, b in enumerate(self._auto_boxes or []):
+                        if list(region) == list(b):
+                            rects = self._scan_rects or []
+                            scan = rects[i] if i < len(rects) else None
+                            break
+                base = scan or (region if exam_mode
+                                else plain_band(x1, y1, x2, y2))
+                crop = self.screen.grab(base)
             except Exception as e:
                 olog(f"截图失败: {e}")
                 return
@@ -1152,17 +1313,38 @@ class KejuTool(threading.Thread):
                 if len(olines) >= 3 and not any(
                         _opt_hit_strict(core.normalize(entry["a"]), o)
                         for o in olines):
-                    olog(f"答案「{entry['a']}」不在当屏选项"
-                         f"({'/'.join(olines[:4])})里 —— 疑似该答案属于"
-                         "别的玩法,未播报")
-                    record_event("suppressed", answer=entry["a"],
-                                 options="/".join(olines[:4])[:60])
-                    # 压答路径直接用哨兵读到的选项行入库:答案门槛在这条
-                    # 路径上必然不过,但选项本身是当屏的真实选项
-                    self._learn_options(entry, rblocks, qwin, mode_name,
-                                        olines=olines)
-                    self._nomatch_streak = 0
-                    return  # 本轮此区域已处理
+                    # 压答前窄带复检一遍:OCR 偶发整行漏检选项,漏的常是
+                    # 答案那一行(2026-11-15 实测「长沙马王堆」两拍没读出
+                    # 被压)。重读到就照常播报,仍不在才真的压
+                    rlines = None
+                    qs = [rblocks[i] for i in set(qwin or [])
+                          if 0 <= i < len(rblocks)]
+                    if qs:
+                        qbox = (min(b["x1"] for b in qs),
+                                min(b["y1"] for b in qs),
+                                max(b["x2"] for b in qs),
+                                max(b["y2"] for b in qs))
+                        rlines = self._rescan_olines(base, qbox)
+                    if rlines and any(
+                            _opt_hit_strict(core.normalize(entry["a"]), o)
+                            for o in rlines):
+                        olog(f"复检读到「{entry['a']}」就在选项里"
+                             "(首轮整行漏读),照常播报")
+                        note += " [选项复检]"
+                    else:
+                        if rlines:
+                            olines += [o for o in rlines if o not in olines]
+                        olog(f"答案「{entry['a']}」不在当屏选项"
+                             f"({'/'.join(olines[:4])})里 —— 疑似该答案属于"
+                             "别的玩法,未播报")
+                        record_event("suppressed", answer=entry["a"],
+                                     options="/".join(olines[:4])[:60])
+                        # 压答路径直接用哨兵读到的选项行入库:答案门槛在这条
+                        # 路径上必然不过,但选项本身是当屏的真实选项
+                        self._learn_options(entry, rblocks, qwin, mode_name,
+                                            olines=olines)
+                        self._nomatch_streak = 0
+                        return  # 本轮此区域已处理
                 self._remember_answered(entry)
                 self.app.last_question = entry["q"]
                 self.app.last_answer = entry["a"]
@@ -1183,32 +1365,39 @@ class KejuTool(threading.Thread):
                 self._last_announce_ts = time.time()
                 self._nomatch_streak = 0
                 return  # 本轮已播报
-            self._nomatch_streak += 1
             if force:
                 # 手动识别的诊断上屏:界面没有日志框,只写日志等于没反馈
                 self._show_miss(
                     f"未匹配(最高 {self.app.bank.closest(bare):.0f}%)",
                     bare[:40])
-            if self._nomatch_streak == 1:
-                # 没答出的这一刻才算一次"最接近的候选":分数接近=真题没收录
-                # (值得补题库),分数很低=屏幕上根本不是题(聊天/任务栏)
-                self._nomatch_near = self.app.bank.closest(bare)
-                record_event("nomatch", score=round(self._nomatch_near),
-                             text=bare[:80])
-            if (force or self._nomatch_streak == 1
-                    or self._nomatch_streak % 10 == 0):
-                suffix = (f"(连续{self._nomatch_streak}次)"
-                          if self._nomatch_streak > 1 else "")
-                # 同一次漏答只在第 1 次和每 10 次打一行,别刷屏
-                olog(f"题库中未找到匹配(最高 {self._nomatch_near:.0f}%)"
-                     f"{suffix}")
-            if self._nomatch_streak == 1:
-                # 像题目但分数不够:界面提示一声,并记到"疑似未收录"清单
-                # (连当屏的选项一起记,事后 --uncollected 就能直接填答案)
-                tip = note_uncollected(self.app.bank, bare,
-                                       self._leftover_text(rblocks, qwin))
-                if tip:
-                    olog(tip)
+            if questionish(bare):
+                # 漏答计数只认"像题"的读数(2026-11-15):追踪栏/聊天的 junk
+                # 每拍都在推高 streak,真漏答发生时(填空线那题)连"未找到
+                # 匹配"日志都被节流吞掉 —— junk 读数把漏答周期作废,别让它
+                # 稀释信号
+                self._nomatch_streak += 1
+                if self._nomatch_streak == 1:
+                    # 没答出的这一刻才算一次"最接近的候选":分数接近=真题没收录
+                    # (值得补题库),分数很低=屏幕上根本不是题(聊天/任务栏)
+                    self._nomatch_near = self.app.bank.closest(bare)
+                    record_event("nomatch", score=round(self._nomatch_near),
+                                 text=bare[:80])
+                if (force or self._nomatch_streak == 1
+                        or self._nomatch_streak % 10 == 0):
+                    suffix = (f"(连续{self._nomatch_streak}次)"
+                              if self._nomatch_streak > 1 else "")
+                    # 同一次漏答只在第 1 次和每 10 次打一行,别刷屏
+                    olog(f"题库中未找到匹配(最高 {self._nomatch_near:.0f}%)"
+                         f"{suffix}")
+                if self._nomatch_streak == 1:
+                    # 像题目但分数不够:界面提示一声,并记到"疑似未收录"清单
+                    # (连当屏的选项一起记,事后 --uncollected 就能直接填答案)
+                    tip = note_uncollected(self.app.bank, bare,
+                                           self._leftover_text(rblocks, qwin))
+                    if tip:
+                        olog(tip)
+            else:
+                self._nomatch_streak = 0   # junk/非题读数:漏答周期作废重计
             # 这个客户端的题没答出:看下一个客户端(多开时一个区域没匹配
             # 不该挡住同轮其余客户端,否则它们的题要白等一轮)
             continue
@@ -1227,17 +1416,17 @@ class KejuTool(threading.Thread):
     def _follow_clients(self):
         """客户端被挪动/换了分辨率/开了新的:自动定位来的区域跟着更新。
 
-        每秒最多查一次窗口。逐老槽位认领「能认出是谁」的变化,移除观测
-        区域并提示,剩余支持客户端照常跟随:
+        每秒最多查一次窗口。逐老槽位认领「能认出是谁」的变化:
           - 改成不支持档(如 HD):窗口在、角色名在、画布档不支持
-            -> 「角色名(分辨率)当前分辨率不支持，已移除观测区域」
-          - 退出登录:窗口在、标题抠不出角色名了
-            -> 「角色名已退出登录，已移除观测区域」
+            -> **不移除名单**:转入暂停观测(界面红名,悬停注明
+            「分辨率不支持」),改回支持档自动恢复
+          - 退出登录:窗口在、标题抠不出角色名了 -> 静默移除
           - 关闭:窗口没了(最小化的不算 —— 枚举把它单独记账,原槽位
-            保留等恢复,恢复后位置没变自然续上);静默移除,不提示
-        未被认领的新登录客户端自动纳入观测;一个客户端都不剩时挂空手
-        等待旗(_readopt),检测到登录角色的支持客户端就自动定位收编 ——
-        启动没开游戏/换角色/重开客户端都不用手动刷新。
+            保留等恢复,恢复后位置没变自然续上);静默移除
+        剩余支持客户端照常跟随;未被认领的新登录客户端自动纳入观测;
+        一个客户端都不剩时挂空手等待旗(_readopt),检测到登录角色的
+        支持客户端就自动定位收编 —— 启动没开游戏/换角色/重开客户端
+        都不用手动刷新。
         """
         import core
         now = time.time()
@@ -1252,13 +1441,27 @@ class KejuTool(threading.Thread):
                 found, _minimized = core.find_client_windows()
             except Exception:
                 return
+            self._unsup_reconcile(found)   # 名单里窗口没了的:静默摘掉
+            self._unsup_mark(found)        # 名字在但档位不支持的:记红名不收编
+            self._unsup_heal(found)        # 回到支持档的:摘红名
             found = [(t, b) for t, b in found
-                     if core.client_name(t) and core.client_supported(b)]
+                     if core.client_name(t) and core.client_supported(b, t)]
             if not found:
                 return
+            for t, b in found[core.MAX_CLIENTS:]:
+                name = core.client_name(t)
+                if name in self._dropped:
+                    continue
+                canvas = core.client_canvas(b, t)
+                size = (f"{canvas[1][0]}×{canvas[1][1]}" if canvas
+                        else core.client_size_info(b, t)[0])
+                self._dropped.append(name)
+                self.app.log(f"[客户端]已观测满 {core.MAX_CLIENTS} 个,"
+                             f"新客户端 {name}({size})已丢弃")
             boxes = [[int(v) for v in b] for _t, b in found[:core.MAX_CLIENTS]]
             names = [core.client_name(t) for t, _b in found[:core.MAX_CLIENTS]]
             self.set_auto_boxes(boxes, names)
+            self._sync_scan_rects(found[:core.MAX_CLIENTS])
             mine = self.app.cfg.setdefault("keju", {})
             mine["regions"] = boxes + [None] * (core.MAX_CLIENTS - len(boxes))
             self.forget_region_memory()
@@ -1269,16 +1472,57 @@ class KejuTool(threading.Thread):
             raw, minimized = core.find_client_windows()
         except Exception:
             return
-        found = [(t, b) for t, b in raw if core.client_supported(b)]
+        self._unsup_reconcile(raw)         # 名单里窗口没了的:静默摘掉
+        self._unsup_mark(raw)              # 名字在但配到画布档不支持的:记红名
+        self._unsup_heal(raw)              # 回到支持档的:摘红名(自愈误标)
+        found = [(t, b) for t, b in raw if core.client_supported(b, t)]
+        self._sync_scan_rects(found)   # 每拍同步:扫描区跟着画布走(稳态也刷)
         boxes = [[int(v) for v in b] for _t, b in found[:core.MAX_CLIENTS]]
-        if boxes == self._auto_boxes:
+        slot_names = {n for n in self._client_names if n}
+        found_names = {core.client_name(t) for t, _b in found}
+        missing = slot_names - found_names          # 观测中不再支持/没了的
+        extras = [(t, b) for t, b in found
+                  if core.client_name(t) not in slot_names]   # 观测外新增的
+        if not missing and extras:
+            # 观测中的都还在,多出来的是新客户端:有空位就接入,满员直接丢弃
+            slots = [list(b) for b in (self._auto_boxes or [])]
+            slot_list = [n for n in self._client_names if n]
+            adopted = False
+            for t, b in extras:
+                name = core.client_name(t)
+                canvas = core.client_canvas(b, t)
+                size = (f"{canvas[1][0]}×{canvas[1][1]}" if canvas else
+                        core.client_size_info(b, t)[0])
+                if len(slots) >= core.MAX_CLIENTS:
+                    if name not in self._dropped:
+                        self._dropped.append(name)
+                        self.app.log(f"[客户端]已观测满 {core.MAX_CLIENTS} 个,"
+                                     f"新客户端 {name}({size})已丢弃")
+                    continue
+                slots.append([int(v) for v in b])
+                slot_list.append(name)
+                adopted = True
+                if name in self._dropped:
+                    self._dropped.remove(name)
+                self.app.log(f"[客户端]检测到新客户端 {name}({size}),"
+                             "已自动纳入观测")
+            if adopted:
+                self.set_auto_boxes(slots, slot_list)
+                self._sync_scan_rects(found)   # 新槽位当拍就用上画布框
+                mine = self.app.cfg.setdefault("keju", {})
+                mine["regions"] = (slots
+                                   + [None] * (core.MAX_CLIENTS - len(slots)))
+                self.forget_region_memory()
             return
-        if not core.can_follow_clients(boxes, self._auto_boxes):
-            # 数量变了。逐老槽位认领「能认出是谁」的变化:改成不支持档、
-            # 退出登录、关闭(窗口没了;最小化在 minimized 里单独记账,
-            # 原槽位保留等恢复)—— 都移除观测区域并提示;与老区域交叠的
-            # 支持客户端照常跟随;未被认领的新登录客户端自动纳入观测。
-            drops, keep, moved = [], [], False
+        if not missing and boxes == self._auto_boxes:
+            return
+        if missing or not core.can_follow_clients(boxes, self._auto_boxes):
+            # 数量变了。逐老槽位认领「能认出是谁」的变化:改成不支持档的
+            # 转入暂停观测(红名,改回支持档自动恢复);退出登录、关闭
+            # (窗口没了;最小化在 minimized 里单独记账,原槽位保留等恢复)
+            # 静默移除;与老区域交叠的支持客户端照常跟随;未被认领的
+            # 新登录客户端自动纳入观测。
+            removed, keep, moved = 0, [], False
             claimed = set()                # 一个窗口只归一个老槽位(改档的
             for i, ob in enumerate(self._auto_boxes):   # 窗口变大,可能同时
                 old_name = (self._client_names[i]       # 压住隔壁老区域)
@@ -1288,7 +1532,7 @@ class KejuTool(threading.Thread):
                     if j in claimed or not _boxes_overlap(b, ob):
                         continue
                     claimed.add(j)
-                    if core.client_supported(b):
+                    if core.client_supported(b, t):
                         hit = (t, b, None)
                     elif core.client_name(t):
                         hit = (t, b, "tier")
@@ -1297,58 +1541,67 @@ class KejuTool(threading.Thread):
                     break
                 if hit is None:
                     # 窗口认领不到:最小化还在(角色名对得上)就保留原槽位
-                    # 等恢复;真没了就是已关闭,移除观测区域
+                    # 等恢复;真没了就是已关闭,静默移除
                     if (old_name and any(core.client_name(t) == old_name
                                          for t in minimized)):
                         keep.append((list(ob), old_name))
                     else:
-                        drops.append((old_name, None, None, "closed"))
+                        removed += 1   # 关闭/退出登录:静默移除(2026-11-13)
                     continue
                 t, b, why = hit
                 if why:
-                    drops.append((old_name, t, b, why))
+                    # 不支持档/退出登录:槽位让出不再截图识别(慢、字小);
+                    # 红名已由 _unsup_mark 统一记,这里不重复提示
+                    removed += 1
                 else:
                     bb = [int(v) for v in b]
                     moved = moved or bb != ob
-                    keep.append((bb, core.client_name(t)))
+                    nm = core.client_name(t)
+                    if nm in self._unsup:      # 保险:恢复的不留红名
+                        self._unsup.remove(nm)
+                    keep.append((bb, nm))
             # 新客户端:未被老槽位认领、登录角色、档位支持 —— 自动纳入观测
             for j, (t, b) in enumerate(raw):
                 if j in claimed:
                     continue
                 name = core.client_name(t)
-                if not name or not core.client_supported(b):
+                if not name or not core.client_supported(b, t):
+                    continue
+                canvas = core.client_canvas(b, t)
+                size = (f"{canvas[1][0]}×{canvas[1][1]}" if canvas else
+                        core.client_size_info(b, t)[0])
+                if len(keep) >= core.MAX_CLIENTS:
+                    # 观测满员:新客户端直接丢弃(同一客户端只记一次),
+                    # 槽位空出后走这条路自动接入
+                    if name not in self._dropped:
+                        self._dropped.append(name)
+                        self.app.log(f"[客户端]已观测满 {core.MAX_CLIENTS} 个,"
+                                     f"新客户端 {name}({size})已丢弃")
                     continue
                 claimed.add(j)
-                canvas = core.client_canvas(b)
-                size = (f"{canvas[1][0]}×{canvas[1][1]}" if canvas else
-                        core.client_size_info(b)[0])
                 keep.append(([int(v) for v in b], name))
+                if name in self._unsup:
+                    self._unsup.remove(name)   # 保险:恢复的不留红名(heal 已摘)
+                if name in self._dropped:
+                    self._dropped.remove(name)   # 之前满员丢过:接入即摘标
                 self.app.log(f"[客户端]检测到新客户端 {name}({size}),"
                              "已自动纳入观测")
-            for old_name, t, b, why in drops:
-                if why == "tier":
-                    canvas = core.client_canvas(b)
-                    size = (f"{canvas[1][0]}×{canvas[1][1]}" if canvas else
-                            core.client_size_info(b)[0])
-                    self.app.log(f"[客户端]{core.client_name(t)}({size})"
-                                 "当前分辨率不支持，已移除观测区域")
-                elif why != "closed":          # 关闭静默移除,不提示(用户定的)
-                    self.app.log(f"[客户端]{old_name or '客户端'}"
-                                 "已退出登录，已移除观测区域")
             keep = keep[:core.MAX_CLIENTS]
             self.set_auto_boxes([bb for bb, _n in keep], [n for _bb, n in keep])
+            self._sync_scan_rects(found)   # 槽位重排了,按新矩形重新对位
             mine = self.app.cfg.setdefault("keju", {})
             mine["regions"] = ([bb for bb, _n in keep]
                                + [None] * (core.MAX_CLIENTS - len(keep)))
             self.forget_region_memory()    # 区域变了,旧的画面/题目记忆全作废
-            if keep and (drops or moved):
+            if keep and (removed or moved):
                 self.app.log(f"[客户端]{len(keep)} 个客户端位置变了,已自动跟随")
             if not keep:
-                self._readopt = True   # 全部退出登录/改档:等重新登录就自动收编
+                self._readopt = True   # 全部退出登录/关闭:等重新登录就自动收编
             return
         names = [core.client_name(t)
                  for t, _b in found[:core.MAX_CLIENTS]]   # 跟随时名字一并刷新
         self.set_auto_boxes(boxes, names)
+        self._sync_scan_rects(found)   # 槽位矩形变了,按新矩形重新对位
         mine = self.app.cfg.setdefault("keju", {})
         mine["regions"] = boxes + [None] * (core.MAX_CLIENTS - len(boxes))
         self.forget_region_memory()            # 位置变了,旧的画面/题目记忆全作废

@@ -1,7 +1,6 @@
 """界面层:单窗口应用 —— 启动即 mhxy_keju,窗口生命周期与各按钮回调(布局在 ui/)。"""
 import os
 import time
-from tkinter import messagebox
 
 import bank                 # 题库子系统:只有"检查/更新题库"这条路用它
 import core                 # 地基:配置/截图/语音/引擎与键名归属表
@@ -276,13 +275,15 @@ class App:
         """刷新客户端胶囊(角色名/未定位);引擎还没起来时也安全。"""
         regions = ((self._get("regions") or [])
                    + [None] * core.MAX_CLIENTS)
-        names = []
+        names, unsup = [], []
         if getattr(self, "engine", None) is not None:
             try:
-                names = self.engine.keju_tool.ui_state().get("names") or []
+                st = self.engine.keju_tool.ui_state()
+                names = st.get("names") or []
+                unsup = st.get("unsup") or []
             except Exception:
                 names = []
-        ui_keju.refresh_capsules(self, regions, names)
+        ui_keju.refresh_capsules(self, regions, names, unsup)
 
     def on_toggle_mute(self):
         if getattr(self, "_readonly", False):
@@ -293,15 +294,14 @@ class App:
         self.log("[语音]已静音(界面照旧显示答案)"
                  if self._get("mute") else "[语音]已恢复")
 
-    def on_autolocate(self, manual=False):
+    def on_autolocate(self):
         """按窗口枚举,把每个梦幻西游客户端"整窗口"填成一条题目对话框区域。
 
         整窗口覆盖=不漏对话框;窗口移动/换分辨率/多开位置不同都能一次到位。
         (实测:整窗口 640x480 档 OCR 中位 0.30s,与只框对话框持平)
         每次都会先把旧坐标全部清掉:客户端挪过位置后,旧坐标只会误导。
         最多定位 core.MAX_CLIENTS 个客户端,多出的舍弃。
-        manual=True 是「客户端刷新」按钮的手动刷新:检测到的全是登录窗时
-        弹「请先登录角色」;启动自动定位只落日志,别一开应用就弹框。
+        只在启动时调一次;之后的增删变化全靠 KejuTool._follow_clients 自动跟。
         """
         if getattr(self, "_readonly", False):
             return    # 停用态:按钮点击一律静默丢弃(不处理、不记日志)
@@ -325,16 +325,20 @@ class App:
             return
         # 只定位支持的三档(640×480 / 800×600 / 1024×768,按画布精确判):其它档
         # 识别慢、字也小,跳过并弹框说明;混合时支持的照常定位
-        ok = [(t, b) for t, b in wins if core.client_supported(b)]
-        bad = [(t, b) for t, b in wins if not core.client_supported(b)]
+        ok = [(t, b) for t, b in wins if core.client_supported(b, t)]
+        bad = [(t, b) for t, b in wins if not core.client_supported(b, t)]
         if not ok:
             if bad and all(not core.client_name(t) for t, _b in bad):
                 # 全是登录窗(标题抠不出角色名,独立版/多标签版同判):
-                # 提示登录后再刷新,别拿「分辨率不支持」误导人
-                self._hint_login(len(bad), manual)
+                # 正常状态不是错 —— 落日志等自动接入,别拿「分辨率不支持」误导人
+                self.log(f"[客户端]检测到 {len(bad)} 个登录窗口:"
+                         "登录角色后会自动接入")
             else:
                 self._log_unsupported(bad)
-                self._warn_resolution()
+            # 名字在但不支持档的:记入暂停观测名单(界面红名),登录窗不记
+            self.engine.keju_tool.set_unsup([core.client_name(t)
+                                             for t, _b in bad
+                                             if core.client_name(t)])
             core.save_config(self.cfg)
             return
         self._set("regions", [])
@@ -345,10 +349,14 @@ class App:
             regs.append(None)
         names = [core.client_name(t) for t, _box in ok[:core.MAX_CLIENTS]]
         self.engine.keju_tool.set_auto_boxes([r for r in regs if r], names)
+        # 名字在但不支持档的客户端:记入暂停观测名单(界面红名,不定位)
+        self.engine.keju_tool.set_unsup([core.client_name(t)
+                                         for t, _b in bad
+                                         if core.client_name(t)])
         core.save_config(self.cfg)
         self._refresh_regions()
-        for i, (_title, box) in enumerate(ok[:core.MAX_CLIENTS]):
-            size, _is_min = core.client_size_info(box)
+        for i, (w_title, box) in enumerate(ok[:core.MAX_CLIENTS]):
+            size, _is_min = core.client_size_info(box, w_title)
             tail = f" 角色「{names[i]}」" if names[i] else ""
             self.log(f"[客户端{i + 1}]整个客户端 "
                      f"({box[0]},{box[1]})-({box[2]},{box[3]}) {size}{tail}")
@@ -358,9 +366,8 @@ class App:
                  f"多出的 {len(ok) - n_set} 个舍弃"
                  if len(ok) > core.MAX_CLIENTS else "")
         self.log(f"[客户端]发现 {len(wins)} 个客户端,已定位 {n_set} 个{extra}")
-        if bad:
-            self._warn_resolution()
-        sizes = [core.client_size_info(w[1]) for w in ok[:core.MAX_CLIENTS]]
+        sizes = [core.client_size_info(w[1], w[0])
+                 for w in ok[:core.MAX_CLIENTS]]
         if any(not min_ok for _t, min_ok in sizes):
             self.log(f"[提示]不是最小分辨率 —— 游戏分辨率调成 "
                      f"{core.MIN_GAME_RES[0]}×{core.MIN_GAME_RES[1]} 效果最佳"
@@ -373,63 +380,44 @@ class App:
                      "科举会试/殿试带锚点更稳")
 
     def _log_unsupported(self, bad):
-        """逐个记一行不支持的客户端(跳过原因落在文件里,弹框只报总数)。
+        """逐个记一行不支持的客户端(只落日志,不弹框 —— 红名已表达)。
 
         原因文案在 core.client_size_info 里按场景写全(分辨率不支持 /
-        未登录角色没有游戏画面),这里只补支持档。
+        角色已登录还没读到画面 / 未登录角色没有游戏画面),这里只补支持档。
         """
-        for _title, box in bad:
-            self.log(f"[客户端]{core.client_size_info(box)[0]}"
+        for w_title, box in bad:
+            self.log(f"[客户端]{core.client_size_info(box, w_title)[0]}"
                      f"(只支持 {core.supported_res_text()})")
-
-    def _warn_resolution(self):
-        """定位到了不支持分辨率档的客户端:弹一次框说明(测试里桩掉)。
-
-        跳过了哪些窗口走日志(_log_unsupported),框里只说规则一句话。
-        """
-        messagebox.showwarning(
-            "分辨率不支持",
-            f"目前只支持 {core.supported_res_text()} 分辨率,"
-            f"{core.MIN_GAME_RES[0]}×{core.MIN_GAME_RES[1]} 效果最佳")
-
-    def on_refresh_clients(self):
-        """「客户端刷新」按钮:手动刷新(全是登录窗时弹「请先登录角色」)。"""
-        self.on_autolocate(manual=True)
-
-    def _hint_login(self, count, manual):
-        """检测到的客户端全是登录窗:提示登录角色后再刷新。
-
-        独立窗口版和多标签版的登录窗都靠「标题抠不出角色名」认出来
-        (见 core.find_client_canvases 的登录闸)。手动点「客户端刷新」
-        才弹框;启动时的自动定位只落日志,别一开应用就弹框。
-        """
-        self.log(f"[客户端]检测到 {count} 个登录窗口:"
-                 "请登录角色后再点「客户端刷新」")
-        if manual:
-            messagebox.showinfo("请先登录角色",
-                                "请先登录角色,登录后再点「客户端刷新」")
 
     def on_client_hover_start(self, i):
         """鼠标悬停角色名框:浮出该角色的游戏分辨率小条。
 
         按**角色名**现场匹配(标题实时解析,与窗口位置无关 —— 拖动窗口后
         定位时的区域框会过期,名字不会);没跟踪到名字的槽位退回区域框
-        匹配;都查不到(确实退回登录界面)就地写明,不弹框。
+        匹配;都查不到就地写明(有名字=画布还没出来;没名字=未登录),
+        不弹框。
         """
-        names = []
+        names, unsup = [], []
         if getattr(self, "engine", None) is not None:
             try:
-                names = self.engine.keju_tool.ui_state().get("names") or []
+                st = self.engine.keju_tool.ui_state()
+                names = st.get("names") or []
+                unsup = st.get("unsup") or []
             except Exception:
                 names = []
         name = names[i] if i < len(names) else None
         if name:
+            if name in unsup:
+                # 分辨率不支持暂停观测的角色:不查分辨率,直接说明
+                self._hover_tip(i, "分辨率不支持")
+                return
             for title, res, _rect, _ratio, _mode in \
                     core.find_client_canvases()[0]:
                 if core.client_name(title) == name:
                     self._hover_tip(i, f"{res[0]}×{res[1]}")
                     return
-            self._hover_tip(i, "未登录角色,没有游戏画面")
+            # 名字在但画布没查到:登录/加载过渡(标题先于画布),别说成未登录
+            self._hover_tip(i, "还没读到游戏画面")
             return
         regions = [r for r in (self._get("regions") or []) if r]
         if i >= len(regions):
@@ -497,6 +485,7 @@ class App:
         """清空全部客户端坐标 + 对应的画面/题目记忆(不落盘、不记日志)。"""
         self._set("regions", [None] * core.MAX_CLIENTS)
         self.engine.keju_tool.set_auto_boxes(None)   # 清空了就不再跟随客户端
+        self.engine.keju_tool.set_unsup(None)   # 暂停观测的红名名单一并清掉
         self._forget_region_memory()
         self._refresh_regions()
 
@@ -840,6 +829,7 @@ class App:
             self._note_broken("环境预检", e)
 
     def on_close(self):
+        self.log("[应用]窗口关闭,已退出")   # 退出留痕:日志里有这行 = 被 × 关的
         # 关闭即清空坐标:下次启动会重新自动定位,旧坐标不留在配置里误导
         try:
             self._clear_all_regions()

@@ -61,6 +61,18 @@ def _js_unescape(s: str) -> str:
         return s
 
 
+def _no_blank(s: str) -> str:
+    """填空题的空格线(一串下划线)在题库两边比对处剥掉。
+
+    题库把填空空格原样存成"____"(如 孔子谓季氏:八佾舞于庭,____),而
+    OCR 读不出这条图形线(读了也是长短随机的几截),两边长度对不上会把
+    相似度拖到阈值之下 —— 2026-11-15 车迟斗法实测:31 字的存 norm vs
+    10 字的读数只有 44%,整道题静默漏答。只在 bank 的比对两侧剥,不进
+    core.normalize:那是通用文本设施,选项仓库等处的键不能跟着变。
+    """
+    return s.replace("_", "") if "_" in s else s
+
+
 def fetch_official_bank(activities=None):
     """【主源】直连网易官方答题器,按模块解析各活动题库。
 
@@ -121,7 +133,7 @@ def fetch_official_bank(activities=None):
             seen.add((q, a))
             entries.append({"source_id": str(len(entries) + 1), "question": q,
                             "answer": a, "activity": act or "keju",
-                            "normalized_question": core.normalize(q)})
+                            "normalized_question": _no_blank(core.normalize(q))})
             per_act[act or "keju"] = per_act.get(act or "keju", 0) + 1
     # 跨活动去重:同一题干在多个活动里都出现时优先保留科举版本
     # (签到版的答案常带同义词后缀如"蒙古族,蒙古",科举版更干净)
@@ -203,7 +215,7 @@ def merge_bank_entries(old_entries: list, new_entries: list) -> tuple:
     import core
 
     def key(it):
-        q = core.normalize(it.get("question") or it.get("q") or "")
+        q = _no_blank(core.normalize(it.get("question") or it.get("q") or ""))
         return (q, (it.get("answer") or it.get("a") or "").strip())
 
     old_keys = {key(it) for it in old_entries if key(it)[0]}
@@ -312,7 +324,7 @@ class QuestionBank:
         for it in raw:
             q = (it.get("question") or "").strip()
             a = (it.get("answer") or "").strip()
-            nq = core.normalize(it.get("normalized_question") or q)
+            nq = _no_blank(core.normalize(it.get("normalized_question") or q))
             if q and a and nq:
                 self.entries.append({"q": q, "a": a, "n": nq})
         self._norms = [e["n"] for e in self.entries]
@@ -332,7 +344,7 @@ class QuestionBank:
         """同 match,收归一化后的题干(调用方已算过就别重复归一化)。"""
         from rapidfuzz import fuzz, process
 
-        q = q_norm
+        q = _no_blank(q_norm)
         if not q or not self.entries:
             return None, 0.0
         if len(q) < 10:
@@ -365,8 +377,8 @@ class QuestionBank:
 
         if not q_norm or not self.entries:
             return None
-        r = process.extractOne(q_norm, self._norms, scorer=fuzz.ratio,
-                               score_cutoff=int(cutoff))
+        r = process.extractOne(_no_blank(q_norm), self._norms,
+                               scorer=fuzz.ratio, score_cutoff=int(cutoff))
         if not r:
             return None
         return r[1], self.entries[r[2]]
@@ -376,7 +388,7 @@ class QuestionBank:
         import core
         from rapidfuzz import fuzz, process
 
-        q = core.normalize(text)
+        q = _no_blank(core.normalize(text))
         if not q or not self.entries:
             return []
         if len(q) < 10:

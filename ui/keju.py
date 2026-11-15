@@ -15,8 +15,7 @@ MINI_MARGIN, MINI_TOP = 24, 36      # 默认停靠:屏幕右上角,留边距
 # ---- 主窗:左竖排角色名 + 右上操作钮 + 题目识别区 ----
 WIN_W, WIN_H = 664, 232
 SIDE_W = 170                        # 左栏宽
-BOX_W, BOX_H = 146, 30              # 角色名框 / 客户端刷新按钮(同宽对齐)
-BOX_STEP = 36                       # 竖排步进(框高 30 + 间距 6)
+BOX_W, BOX_H = 146, 30              # 角色名框
 BTN_W, BTN_H = 110, 36            # 右上操作钮:等宽大钮,4 颗正好铺满右区
 MAIN_X = 182                        # 右区起始 x(左栏 170 + 12 间距)
 MODE_MENU_X, MODE_MENU_Y = MAIN_X, 50
@@ -30,6 +29,7 @@ MODE_HINT = "点上方模式按钮可切换模式"
 YH = "Microsoft YaHei UI"
 Q_FONT = (YH, 13)
 A_FONT = (YH, 36, "bold")
+UNSUP_RED = "#e0554d"               # 分辨率不支持暂停观测的角色名(红)
 
 # ---- 双皮肤:M1 玄夜(深)/ M4 玄白(浅),换肤按钮一键切换 ----
 SKINS = {
@@ -264,21 +264,16 @@ def build(app, skin="dark"):
     ui_widgets.set_place(app.root, size=(WIN_W, WIN_H))
     app.root.configure(bg=th["bg"])
 
-    # 左栏:角色名竖排 + 客户端刷新(替代原定位按钮)
+    # 左栏:角色名竖排(客户端增删全靠自动跟随,没有手动入口)
     side = tk.Frame(app.root, width=SIDE_W, height=WIN_H, bg=th["panel"],
                     highlightthickness=0)
-    side.place(x=0, y=0, width=SIDE_W, height=WIN_H)  # 显式定高:刷新钮才会露出
+    side.place(x=0, y=0, width=SIDE_W, height=WIN_H)  # 显式定高:place 不产生请求尺寸
     app.client_capsules = []
     for i in range(core.MAX_CLIENTS):
         cv = tk.Canvas(side, width=BOX_W, height=BOX_H,
                        highlightthickness=0, bg=th["panel"])
         cv.grid(row=i, column=0, padx=(12, 12), pady=(12 if i == 0 else 0, 6))
         app.client_capsules.append(cv)
-    app.refresh_btn = TextButton(
-        side, "客户端刷新", app.on_refresh_clients,
-        palette=_btn_pal(th["primary"], 10), width=BOX_W, height=BOX_H,
-        radius=th["btn_r"], bg=th["panel"])
-    app.refresh_btn.place(x=12, y=12 + core.MAX_CLIENTS * BOX_STEP)
     # 左栏空态占位:没定位到客户端时显示(见 refresh_capsules / draw_side_ph)
     app.side_ph = tk.Canvas(side, width=BOX_W, height=150,
                             highlightthickness=0, bg=th["panel"])
@@ -472,11 +467,28 @@ def build_mini(app):
     app.mini = m
 
 
-def _draw_capsule(cv, i, name, th):
-    """重画第 i 个角色名框(只画已定位的):全名,无按钮。
+def _fit_name(name, max_units=12):
+    """名字按显示宽截断:上限 6 个汉字(汉字/全角算 2、半角算 1)。
+
+    不补省略号直接切 —— 角色名的区分度多在数字尾缀(杰尼龟徒弟10 /
+    杰尼龟徒弟11),按宽切保得住尾缀,补 … 反而把它们截成一样。
+    """
+    out, units = [], 0
+    for ch in str(name or ""):
+        w = 2 if ord(ch) > 0x2E7F else 1     # CJK 从 0x2E80 起,半角都在之前
+        if units + w > max_units:
+            break
+        out.append(ch)
+        units += w
+    return "".join(out)
+
+
+def _draw_capsule(cv, i, name, th, bad=False):
+    """重画第 i 个角色名框(只画已定位的):名字按显示宽截 6 个汉字,无按钮。
 
     多边形内缩 1px:贴边画的描边下半像素会被画布裁掉(下边框消失);
     文字按 bbox 实测垂直居中 —— 中文字形在行框里偏上,固定偏移猜不准。
+    bad=True:分辨率不支持暂停观测的角色,名字画红。
     """
     w, h = int(cv["width"]), int(cv["height"])
     cv.delete("all")
@@ -488,9 +500,10 @@ def _draw_capsule(cv, i, name, th):
         if bb:
             cv.move(item, 0, h / 2 - (bb[1] + bb[3]) / 2)
 
-    label = (name or f"客户端{i + 1}")[:6]
+    label = _fit_name(name) or f"客户端{i + 1}"
     _vcenter(cv.create_text(12, h // 2, text=label, font=(YH, 10),
-                            fill=th["name"], tags="name", anchor="w"))
+                            fill=UNSUP_RED if bad else th["name"],
+                            tags="name", anchor="w"))
 
 
 def draw_side_ph(cv, th):
@@ -512,15 +525,20 @@ def draw_side_ph(cv, th):
                    fill=th["ph_sub"], tags="ph")
 
 
-def refresh_capsules(app, regions, names):
+def refresh_capsules(app, regions, names, unsup=None):
     """App 调:定位到几个客户端就画几个名字框(最多 MAX_CLIENTS)。
 
     一个都没有时名字框全藏,显示左栏占位图。区域列表在跟随/自动定位
-    后始终是"非空前缀",所以数量 = 非空个数。只画不改状态。
+    后始终是"非空前缀",所以数量 = 非空个数;分辨率不支持暂停观测的
+    客户端没有区域,名字排在已定位的后面,一样占一格(红名)。
+    只画不改状态。
     """
     th = SKINS[getattr(app, "skin", "dark")]
     regions = list(regions or []) + [None] * core.MAX_CLIENTS
-    n = sum(1 for r in regions if r)
+    names = list(names or [])
+    unsup = set(unsup or [])
+    n = sum(1 for i in range(core.MAX_CLIENTS)
+            if regions[i] or (i < len(names) and names[i]))
     ph = getattr(app, "side_ph", None)
     if n == 0:
         for cv in getattr(app, "client_capsules", []):
@@ -538,8 +556,8 @@ def refresh_capsules(app, regions, names):
             cv.grid_remove()
             continue
         cv.grid()
-        name = names[i] if i < len(names or []) else None
-        _draw_capsule(cv, i, name, th)
+        name = names[i] if i < len(names) else None
+        _draw_capsule(cv, i, name, th, bad=name in unsup)
         # 悬停角色名框 = 浮出该角色的游戏画面分辨率(行为在 app.on_client_hover_*)
         cv.bind("<Enter>", lambda _e, i=i: app.on_client_hover_start(i))
         cv.bind("<Leave>", lambda _e, i=i: app.on_client_hover_end(i))

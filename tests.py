@@ -340,6 +340,21 @@ def sec_bank():
     picked2, _, note2 = QuestionBank.pick_with_options(two, "A 完全不相干")
     check("pick_with_options:选项都不沾边则回落最高分",
           picked2["a"] == "甲" and not note2)
+
+    # 填空题的空格线:题库存着"____",OCR 读不出这条图形线(读了也是长短
+    # 随机的几截)—— 两边比对都剥掉下划线,否则 31 字存 norm vs 10 字读数
+    # 只有 44%(2026-11-15 车迟斗法实测:八佾舞于庭整题静默漏答)
+    tmp = tempfile.mkdtemp(prefix="keju_blank_")
+    bbank = make_bank(os.path.join(tmp, "blank_bank.json"), [
+        {"q": "孔子谓季氏：八佾舞于庭，_____________________",
+         "a": "是可忍也，孰不可忍也。"}])
+    hit_b, score_b = bbank.match("孔子谓季氏：“八偷舞于庭，”", 80)
+    check("填空线:题库空格线不参与比对(读不出图形线也能命中)",
+          hit_b is not None and hit_b["a"] == "是可忍也，孰不可忍也。"
+          and score_b >= 80, f"{score_b:.0f}%")
+    pre_b = bbank.prefilter(normalize("孔子谓季氏八偷舞于庭"), 65)
+    check("填空线:滑窗预筛同样放行",
+          pre_b is not None and pre_b[0] >= 65, f"{pre_b}")
     amb_pair = [({"q": "题", "a": "花妖", "n": "题"}, 100.0),
                 ({"q": "题", "a": "蜃气妖", "n": "题"}, 100.0)]
     picked3, _, note3 = QuestionBank.pick_with_options(
@@ -623,6 +638,11 @@ def sec_options():
                                              "蒙古族,蒙古"))
         check("严格命中:2 字变体不互认(花妖≠蜃气妖)",
               not tools_keju._opt_hit_strict(normalize("花妖"), "蜃气妖"))
+        check("严格命中:近似档接住 OCR 一字之差(窦娥冤→实娥冤)",
+              tools_keju._opt_hit_strict(normalize("关汉卿的《窦娥冤》"),
+                                         "关汉卿的《实娥冤》")
+              and not tools_keju._opt_hit_strict(normalize("长沙马王堆"),
+                                                 "海昏侯墓"))
 
         # 哨兵端到端:答案不在当屏选项 -> 压住不播报,但选项照常入库
         sbank = make_bank(os.path.join(sb.dir, "sentinel_bank.json"), [
@@ -655,6 +675,102 @@ def sec_options():
         eng2.keju_tool.keju_cycle(True)
         check("哨兵:答案在当屏选项里 -> 照常播报",
               app2.said == ["200"], f"said={app2.said}")
+
+        # 哨兵的候选行按对话框几何过滤(2026-11-15 车迟斗法实测):真选项
+        # 被 OCR 漏读的一拍,题干上方的 NPC 名牌与右侧任务追踪 HUD 的短行
+        # 凑满 3 条,把题库里的正确答案「浙江」误压了。题干正下方同竖列
+        # 才算选项,斜右/上方短行不算 —— 这屏该照常播报
+        wbank = make_bank(os.path.join(sb.dir, "sentinel3_bank.json"), [
+            {"q": "黄酒名品“加饭酒”的产地在哪", "a": "浙江"}])
+        eng3, app3 = mk_engine(
+            wbank, [blk("有个道士", 700, 120),
+                    blk("1200）（通过长", 700, 180),
+                    blk("黄酒名品“加饭酒”的产地在哪", 100, 200),
+                    blk("和尚可前往道", 700, 210),
+                    blk("余时间1小时5", 700, 230)],
+            cfg={"keju": {"exam_mode": False, "mode": "车迟斗法"}})
+        eng3.keju_tool.keju_cycle(True)
+        check("哨兵:HUD/名牌短行不算选项(漏读真选项也不误压)",
+              app3.said == ["浙江"] and not any("未播报" in m for m in app3.logs),
+              f"said={app3.said} logs={app3.logs[-2:]}")
+
+        # 压答前窄带复检(2026-11-15 实测):整带 OCR 把「长沙马王堆」那行
+        # 漏了,答案不在读出的 3 条选项里 —— 复检读到就照常播报
+        mbank = make_bank(os.path.join(sb.dir, "rescan_bank.json"), [
+            {"q": "轻若烟雾薄如蝉翼的丝织品出土于哪座陵墓",
+             "a": "长沙马王堆"}])
+        mblocks = [blk("轻若烟雾薄如蝉翼的丝织品出土于哪座陵墓", 100, 200),
+                   blk("洛庄汉王陵", 100, 240), blk("南越王陵", 100, 270),
+                   blk("海昏侯墓", 100, 300)]
+        eng4, app4 = mk_engine(mbank, [],
+                               cfg={"keju": {"exam_mode": False}})
+        calls = {"n": 0}
+
+        def _ocr2(img, **kw):
+            calls["n"] += 1
+            return mblocks if calls["n"] == 1 else [blk("长沙马王堆", 100, 0)]
+
+        eng4.ocr = types.SimpleNamespace(recognize_blocks=_ocr2)
+        eng4.keju_tool.keju_cycle(True)
+        check("哨兵:复检读到漏检的答案行 -> 照常播报",
+              app4.said == ["长沙马王堆"]
+              and any("选项复检" in m for m in app4.logs),
+              f"said={app4.said} logs={app4.logs[-2:]}")
+
+        # 复检也读不到(桩每拍都返回同一批块)-> 仍按原判压答
+        eng5, app5 = mk_engine(
+            sbank, [blk("御前科举大赛第1关：这一关考的是综合。"
+                        "题目：仓库全部整理消耗多少体力", 100, 200),
+                    blk("20", 100, 240), blk("30", 200, 240),
+                    blk("0", 300, 240), blk("50", 400, 240)])
+        eng5.keju_tool.keju_cycle(True)
+        check("哨兵:复检仍读不到答案 -> 照旧压答",
+              not app5.said and any("未播报" in m for m in app5.logs),
+              f"said={app5.said} logs={app5.logs[-2:]}")
+
+        # 无锚点模式的扫描区 = 画布 × DLG_RATIOS(2026-11-15 接隔壁降妖伏魔
+        # 的定稿比例表):跟随每拍同步各槽位,识别按它截;没同步到的拍退回
+        # 整窗比例带(PLAIN_BAND)。截屏区用记录桩验证
+        scanbank = make_bank(os.path.join(sb.dir, "scan_bank.json"), [
+            {"q": "轻若烟雾薄如蝉翼的丝织品出土于哪座陵墓", "a": "长沙马王堆"}])
+        grabbed = []
+
+        class _RecScreen:
+            def grab(self, region=None):
+                grabbed.append(tuple(region) if region else None)
+                return np.zeros((30, 60, 3), np.uint8)
+
+        eng6, app6 = mk_engine(scanbank, [blk("轻若烟雾薄如蝉翼的丝织品出土于哪座陵墓",
+                                              100, 200)],
+                               cfg={"keju": {"exam_mode": False}})
+        eng6.screen = _RecScreen()
+        eng6.keju_tool._follow_clients = lambda: None   # 不碰真机枚举
+        eng6.keju_tool._auto_boxes = [[0, 0, 60, 30]]
+        eng6.keju_tool._scan_rects = [[134, 294, 686, 474]]
+        eng6.keju_tool.keju_cycle(True)
+        check("扫描区:无锚点模式按画布×DLG_RATIOS 截",
+              grabbed == [(134, 294, 686, 474)] and app6.said == ["长沙马王堆"],
+              f"grabbed={grabbed[:2]} said={app6.said}")
+
+        eng7, _app7 = mk_engine(scanbank, [blk("轻若烟雾薄如蝉翼的丝织品出土于哪座陵墓",
+                                               100, 200)],
+                                cfg={"keju": {"exam_mode": False}})
+        eng7.screen = _RecScreen()
+        eng7.keju_tool._follow_clients = lambda: None
+        eng7.keju_tool._auto_boxes = [[0, 0, 60, 30]]
+        eng7.keju_tool.keju_cycle(True)
+        check("扫描区:画布框没同步到的拍退回整窗比例带",
+              grabbed[-1] == (2, 12, 54, 21), f"got={grabbed[-1]}")
+
+        eng8 = mk_engine(scanbank, [], cfg={"keju": {}})[0]
+        with patch(client_canvas=lambda b, t=None: ((6, 6, 806, 606), (800, 600))):
+            eng8.keju_tool._auto_boxes = [[0, 0, 60, 30]]
+            eng8.keju_tool._sync_scan_rects(
+                [("梦幻西游 ONLINE - 荆门好礼掌柜", [0, 0, 60, 30])])
+        got = eng8.keju_tool._scan_rects
+        check("扫描区:跟随同步 画布×DLG_RATIOS(800 档 0.16/0.48/0.85/0.78)",
+              got[0] == [134, 294, 686, 474] and got[1:] == [None] * 4,
+              f"rects={got}")
 
 
 # ------------------------------------------------------- 3 题库更新(离线桩)
@@ -1451,7 +1567,7 @@ def sec_engine():
     check("cycle:手动识别读到碎片文字 -> 界面给出原因",
           not app.said and any("凑不出题干" in m for m in app.logs),
           [m for m in app.logs if "题干" in m][:1])
-    eng, app = mk_engine(bank, [blk("完全无关的一段文字内容", 100, 200)],
+    eng, app = mk_engine(bank, [blk("下列哪种说法完全不对？", 100, 200)],
                          cfg={"keju": {"exam_mode": False}})
     eng.keju_tool.keju_cycle(True)
     check("cycle:手动识别没匹配上 -> 界面给出结果",
@@ -1533,8 +1649,9 @@ def sec_engine():
 
     eng_u, _ = mk_engine(bank, [])
     st_u = eng_u.keju_tool.ui_state()
-    check("ui_state:界面只认这个口,给各槽位角色名",
-          set(st_u) == {"names"} and st_u["names"] == [], str(st_u))
+    check("ui_state:界面只认这个口,给各槽位角色名 + 暂停观测(红名)名单",
+          set(st_u) == {"names", "unsup"} and st_u["names"] == []
+          and st_u["unsup"] == [], str(st_u))
 
 
     eng, _ = mk_engine(bank, [])
@@ -1707,7 +1824,15 @@ def sec_ocr_screen():
 
 @section
 def sec_gui():
-    with Sandbox() as sb, patch(update_bank=lambda: (False, "题库已是最新")):
+    # 真身先留住(下面的全局空枚举桩会盖掉模块属性),画布枚举回归用例用
+    real_enum = client_common.find_client_canvases
+    # 全局空枚举桩:界面组建真 App,引擎线程 watching 开着的用例不少,
+    # 真机上游戏开着时会把真实客户端收进测试实例污染断言(2026-11-13
+    # 实测:「荆门好礼掌柜」漏进胶囊断言)。具体用例自己 patch 覆盖这份
+    # 空桩,退出回到空桩;真机枚举的两条用例走 tests 自己的导入,不受影响
+    with Sandbox() as sb, patch(update_bank=lambda: (False, "题库已是最新")), \
+            patch(find_client_windows=lambda: ([], []),
+                  find_client_canvases=lambda: ([], [])):
         # App() 建题库时读的是被 patch 的 BANK_PATH,先往沙箱里放一份
         make_bank(sb.bank, [{"q": "第一道题的题干内容是什么", "a": "答案甲"}])
         old = time.time() - 86400 * 2
@@ -1794,7 +1919,6 @@ def sec_gui():
               and app.manual_btn.label() == "手动识别"
               and app.mini_btn.label() == "迷你置顶"
               and app.mute_btn.label() == "语音静音"
-              and app.refresh_btn.label() == "客户端刷新"
               and app.skin_btn.label() == "换肤"
               and app.root.title() == "mhxy_keju"
               and app.hero_canvas.find_withtag("ph")     # 没信息时显示占位
@@ -1803,10 +1927,10 @@ def sec_gui():
               and app.status_dot.itemcget("dot", "fill")
               == ui_widgets.StatusDot.RED
               and not any(hasattr(app, a) for a in
-                          ("watch_btn", "interval_var", "reward_var", "round_var",
-                           "earn_detail_btn", "clear_log_btn", "hint_label",
-                           "scan_btn", "autolocate_btn", "update_bank_btn",
-                           "tts_btn")))
+                          ("refresh_btn", "watch_btn", "interval_var",
+                           "reward_var", "round_var", "earn_detail_btn",
+                           "clear_log_btn", "hint_label", "scan_btn",
+                           "autolocate_btn", "update_bank_btn", "tts_btn")))
 
         btns = (app.mode_btn, app.manual_btn, app.mini_btn, app.mute_btn)
         xs = [int(b.place_info()["x"]) for b in btns]
@@ -1833,6 +1957,19 @@ def sec_gui():
               caps_text(0) == "客户端1"
               and not app.client_capsules[1].grid_info(),
               f'{caps_text(0)}/胶囊1 {bool(app.client_capsules[1].grid_info())}')
+
+        # 名字显示:按显示宽截到 6 个汉字(汉字算 2、半角算 1),数字尾缀不丢
+        app.engine.keju_tool.set_auto_boxes([[10, 20, 30, 40]],
+                                            ["杰尼龟徒弟10"])
+        app._refresh_regions()
+        check("界面:胶囊名字按显示宽截断(6 个汉字宽,数字尾缀不丢)",
+              caps_text(0) == "杰尼龟徒弟10"
+              and ui_keju._fit_name("一二三四五六七") == "一二三四五六"
+              and ui_keju._fit_name("杰尼龟徒弟10号了") == "杰尼龟徒弟10"
+              and ui_keju._fit_name("客户端1") == "客户端1",
+              repr(caps_text(0)))
+        app.engine.keju_tool.set_auto_boxes(None)   # 还原:后续用例没名字
+        app._refresh_regions()
 
         check("模式:五个模式分两族(科举会试/殿试=锚点,后三个=无锚点)",
               [n for n, exam in core.KEJU_MODES if exam]
@@ -1920,9 +2057,10 @@ def sec_gui():
         check("界面:定位钮旁的说明文字已删(不看说明也会用)",
               not hasattr(app, "hint_label"))
         with patch(find_client_windows=lambda: ([], [])):
-            app.refresh_btn.invoke()          # 走按钮本身,别只调方法
-        check("客户端刷新:按钮点了会跑到定位逻辑",
-              any("没找到梦幻西游客户端窗口" in m for m in ui_logs()),
+            app.on_autolocate()
+        check("自动定位:没找到客户端窗口 -> 落日志提示等自动接入",
+              any("没找到梦幻西游客户端窗口" in m and "自动接入" in m
+                  for m in ui_logs()),
               [m for m in ui_logs() if "没找到" in m][:1])
 
         two = [("梦幻西游 ONLINE - (湖北2区[黄鹤楼] - 祭花′[29024311])",
@@ -1987,8 +2125,8 @@ def sec_gui():
               [m for m in ui_logs() if "更稳" in m][:1])
 
         # 分辨率:支持 640×480 / 800×600 / 1024×768 三档,按画布精确判、
-        # 没画布不收 —— 其它档不定位、弹框说明;混合时支持的照常定位。
-        # 并提醒移动/改分辨率后会自动跟随
+        # 没画布不收 —— 其它档不定位、只落日志(红名表达,不弹框);
+        # 混合时支持的照常定位。并提醒移动/改分辨率后会自动跟随
         big = [("梦幻西游 ONLINE", [0, 0, 1290, 980]),
                ("梦幻西游 ONLINE2", [0, 0, 640, 480])]
         big_canv = [("梦幻西游 ONLINE", (1280, 960), [0, 0, 1290, 980], 1.0, "win"),
@@ -1999,14 +2137,12 @@ def sec_gui():
              patch(find_client_windows=lambda: (list(big), [])), \
              patch(find_client_canvases=lambda: (list(big_canv), [])):
             app.on_autolocate()
-        check("自动定位:非支持档跳过并弹框,支持的照常定位",
+        check("自动定位:非支持档跳过只落日志不弹框(红名表达),支持的照常定位",
               app.cfg["keju"]["regions"][0] == [0, 0, 640, 480]
               and len([r for r in app.cfg["keju"]["regions"] if r]) == 1
               and any("游戏分辨率 1280×960 不支持,已跳过"
                       in m for m in ui_logs())
-              and len(warned) == 1
-              and "640×480 / 800×600 / 1024×768" in warned[0][1]
-              and "效果最佳" in warned[0][1],
+              and not warned,
               f"warned={warned} regions={app.cfg['keju']['regions'][:2]}")
         mid = [("梦幻西游 ONLINE", [0, 0, 860, 600])]
         hinted, warned_mid = [], []
@@ -2043,7 +2179,7 @@ def sec_gui():
               new_lines[:2])
 
         # 登录窗(独立版/多标签版同判:标题抠不出角色名)定位不到;
-        # 手动点「客户端刷新」弹「请先登录角色」,不弹分辨率警告
+        # 正常状态不是错 —— 只落日志提示等自动接入,不弹任何框
         login_wins = [("梦幻西游 ONLINE", [0, 0, 1000, 750])]
         login_hint, login_warn = [], []
         with patch(mods=(gui,), messagebox=types.SimpleNamespace(
@@ -2051,23 +2187,56 @@ def sec_gui():
                 showwarning=lambda *a, **k: login_warn.append(a))), \
              patch(find_client_windows=lambda: (list(login_wins), [])), \
              patch(find_client_canvases=lambda: ([], [])):
-            app.refresh_btn.invoke()
-        check("自动定位:只有登录窗 -> 手动刷新弹「请先登录角色」,不弹分辨率警告",
-              len(login_hint) == 1 and "登录" in login_hint[0][1]
-              and not login_warn
-              and any("检测到 1 个登录窗口" in m for m in ui_logs())
+            app.on_autolocate()
+        check("自动定位:只有登录窗 -> 只落日志提示自动接入,不弹框",
+              not login_hint and not login_warn
+              and any("检测到 1 个登录窗口" in m and "自动接入" in m
+                      for m in ui_logs())
               and app.cfg["keju"]["regions"] == [None] * core.MAX_CLIENTS,
               f"hint={login_hint} warned={login_warn}")
-        login_hint2 = []
+
+        # 名字在但不支持档:记入暂停观测名单(界面红名),不定位,只落日志不弹框
+        hd_named = [("梦幻西游 ONLINE - (湖北2区[黄鹤楼] - 角色己[6])",
+                     [0, 0, 1380, 1060])]
+        hd_named_canv = [(hd_named[0][0], (1280, 960),
+                          [0, 0, 1380, 1060], 1.0, "win")]
+        warned_hd = []
         with patch(mods=(gui,), messagebox=types.SimpleNamespace(
-                showinfo=lambda *a, **k: login_hint2.append(a))), \
-             patch(find_client_windows=lambda: (list(login_wins), [])), \
-             patch(find_client_canvases=lambda: ([], [])):
+                showwarning=lambda *a, **k: warned_hd.append(a))), \
+             patch(find_client_windows=lambda: (list(hd_named), [])), \
+             patch(find_client_canvases=lambda: (list(hd_named_canv), [])):
             app.on_autolocate()
-        check("自动定位:启动路径(非手动)的登录窗只落日志,不弹框",
-              not login_hint2
-              and any("检测到 1 个登录窗口" in m for m in ui_logs()),
-              str(login_hint2))
+        check("自动定位:名字在但不支持档 -> 记入暂停观测(红名),只落日志不弹框",
+              app.engine.keju_tool.ui_state()["unsup"] == ["角色己"]
+              and app.engine.keju_tool._auto_boxes is None
+              and not warned_hd
+              and any("游戏分辨率 1280×960 不支持,已跳过" in m
+                      for m in ui_logs()),
+              f"unsup={app.engine.keju_tool.ui_state()['unsup']} "
+              f"warned={warned_hd}")
+        app.engine.keju_tool.set_unsup(None)
+
+        # 多开窗口重叠:甲(HD,多标签版画布顶上还有标签条)的窗口框住了
+        # 乙的 640×480 画布 —— 按标题配对不借邻居画布,甲照旧红名、
+        # 乙照常定位(纯几何配会把甲误判成支持档收编)
+        ovl_wins = [("梦幻西游 ONLINE - (湖北2区[黄鹤楼] - 角色甲[1])",
+                     [100, 100, 760, 600]),
+                    ("梦幻西游 ONLINE - (湖北2区[黄鹤楼] - 角色乙[2])",
+                     [100, 110, 740, 590])]
+        ovl_canv = [(ovl_wins[1][0], (640, 480), [110, 120, 730, 580],
+                     1.0, "win"),
+                    (ovl_wins[0][0], (1280, 960), [100, 140, 760, 560],
+                     1.0, "tab")]
+        with patch(find_client_windows=lambda: (list(ovl_wins), [])), \
+                patch(find_client_canvases=lambda: (list(ovl_canv), [])):
+            app.on_autolocate()
+        check("自动定位:窗口重叠不借邻居画布,HD 照旧红名、邻居照常定位",
+              app.engine.keju_tool.ui_state()["unsup"] == ["角色甲"]
+              and app.engine.keju_tool._auto_boxes == [[100, 110, 740, 590]]
+              and app.cfg["keju"]["regions"][0] == [100, 110, 740, 590],
+              f"unsup={app.engine.keju_tool.ui_state()['unsup']} "
+              f"boxes={app.engine.keju_tool._auto_boxes}")
+        app.engine.keju_tool.set_unsup(None)
 
         # 跟随:客户端改成不支持档(HD)-> 认出「谁改了档」,移除观测区域并
         # 提示;其余支持客户端照常跟随;收口后同一画面不重复提示。
@@ -2075,7 +2244,7 @@ def sec_gui():
         feng, fapp = mk_engine(make_bank(sb.bank, [
             {"q": "第一道题的题干内容是什么", "a": "答案甲"}]), ())
         # 空手启动:一个客户端都没跟到 -> 检测到登录角色的支持客户端就
-        # 自动定位,不用点「客户端刷新」(mk_engine 默认按死等待旗,这里
+        # 自动定位,不需要手动刷新(mk_engine 默认按死等待旗,这里
         # 显式摆 True = "启动后游戏才开"的空手状态)
         feng.keju_tool._readopt = True
         feng.keju_tool._follow_ts = 0.0
@@ -2111,18 +2280,20 @@ def sec_gui():
         with patch(find_client_windows=lambda: (list(raw_wins), [])), \
                 patch(find_client_canvases=lambda: (list(hd_canv), [])):
             feng.keju_tool._follow_clients()
-        check("跟随:客户端改成不支持档 -> 提示并移除观测区域,其余照常跟随",
+        st = feng.keju_tool.ui_state()
+        check("跟随:客户端改成不支持档 -> 暂停观测不除名(红名),其余照常跟随",
               feng.keju_tool._auto_boxes == [box_b]
-              and feng.keju_tool.ui_state()["names"] == [
-                  "角色乙", None, None, None, None]
+              and st["names"] == ["角色乙", "角色甲", None, None, None]
+              and st["unsup"] == ["角色甲"]
               and fapp.cfg["keju"]["regions"] == [box_b]
               + [None] * (core.MAX_CLIENTS - 1)
-              and any("角色甲(1280×960)当前分辨率不支持，已移除观测区域"
-                      in m for m in fapp.logs[n_before:])
+              and any("角色甲(1280×960)分辨率不支持,已暂停观测" in m
+                      for m in fapp.logs[n_before:])
+              and not any("已移除观测区域" in m for m in fapp.logs[n_before:])
               and any("1 个客户端位置变了,已自动跟随" in m
                       for m in fapp.logs[n_before:]),
               f"boxes={feng.keju_tool._auto_boxes} "
-              f"names={feng.keju_tool.ui_state()['names']} "
+              f"names={st['names']} unsup={st['unsup']} "
               f"regions={fapp.cfg['keju']['regions'][:2]} "
               f"logs={[m for m in fapp.logs[n_before:] if '客户端' in m][:2]}")
         n_before = len(fapp.logs)
@@ -2132,7 +2303,106 @@ def sec_gui():
         check("跟随:收口后同一画面不重复提示", len(fapp.logs) == n_before,
               str(fapp.logs[n_before:]))
 
-        # 退出登录:标题抠不出角色名 -> 认出是谁,移除观测区域并提示
+        # 改回支持档:自动恢复观测(红名摘掉,不需要手动刷新)
+        back_wins = [("梦幻西游 ONLINE - (湖北2区[黄鹤楼] - 角色甲[1])",
+                      [100, 100, 740, 580]),
+                     ("梦幻西游 ONLINE - (湖北2区[黄鹤楼] - 角色乙[2])",
+                      [900, 100, 1560, 600])]
+        back_canv = [(back_wins[0][0], (640, 480),
+                      [110, 110, 730, 570], 1.0, "win"),
+                     (back_wins[1][0], (640, 480),
+                      [910, 110, 1550, 590], 1.0, "win")]
+        feng.keju_tool._follow_ts = 0.0
+        n_before = len(fapp.logs)
+        with patch(find_client_windows=lambda: (list(back_wins), [])), \
+                patch(find_client_canvases=lambda: (list(back_canv), [])):
+            feng.keju_tool._follow_clients()
+        st = feng.keju_tool.ui_state()
+        check("跟随:改回支持档 -> 自动恢复观测并摘掉红名",
+              feng.keju_tool._auto_boxes == [box_b, [100, 100, 740, 580]]
+              and st["unsup"] == []
+              and st["names"] == ["角色乙", "角色甲", None, None, None]
+              and any("角色甲(640×480)分辨率已恢复,继续观测" in m
+                      for m in fapp.logs[n_before:]),
+              f"boxes={feng.keju_tool._auto_boxes} unsup={st['unsup']} "
+              f"logs={[m for m in fapp.logs[n_before:] if '客户端' in m][:2]}")
+
+        # 跟随路径(数量没变,只刷新名字)也自检红名:滞留的误标即摘
+        feng.keju_tool.set_auto_boxes([box_a, box_b], ["角色甲", "角色乙"])
+        feng.keju_tool.set_unsup(["角色甲"])   # 摆一个滞留的误标
+        feng.keju_tool._follow_ts = 0.0
+        n_before = len(fapp.logs)
+        with patch(find_client_windows=lambda: (list(back_wins), [])), \
+                patch(find_client_canvases=lambda: (list(back_canv), [])):
+            feng.keju_tool._follow_clients()
+        check("跟随:红名滞留误标 -> 跟随自检摘掉并提示恢复",
+              feng.keju_tool.ui_state()["unsup"] == []
+              and feng.keju_tool._auto_boxes == [box_a, box_b]
+              and any("角色甲(640×480)分辨率已恢复,继续观测" in m
+                      for m in fapp.logs[n_before:]),
+              f"unsup={feng.keju_tool.ui_state()['unsup']} "
+              f"logs={[m for m in fapp.logs[n_before:] if '客户端' in m][:2]}")
+
+        # 暂停观测的客户端直接关掉:红名静默摘掉(观测名单没变也要摘)
+        feng.keju_tool.set_auto_boxes([box_b], ["角色乙"])
+        feng.keju_tool.set_unsup(["角色甲"])
+        feng.keju_tool._follow_ts = 0.0
+        n_before = len(fapp.logs)
+        with patch(find_client_windows=lambda: ([back_wins[1]], [])), \
+                patch(find_client_canvases=lambda: ([back_canv[1]], [])):
+            feng.keju_tool._follow_clients()
+        check("跟随:暂停观测的客户端关闭 -> 红名静默摘掉",
+              feng.keju_tool.ui_state()["unsup"] == []
+              and feng.keju_tool._auto_boxes == [box_b]
+              and not fapp.logs[n_before:],
+              f"unsup={feng.keju_tool.ui_state()['unsup']} "
+              f"logs={fapp.logs[n_before:]}")
+
+        # 空手等待期只开着 HD 客户端:记入红名名单(不收编、不弹框),
+        # 界面显示红色胶囊;等登录支持档再自动接入
+        feng.keju_tool.set_auto_boxes(None)
+        feng.keju_tool._readopt = True
+        hd_only_wins = [("梦幻西游 ONLINE - (湖北2区[黄鹤楼] - 角色己[6])",
+                         [100, 100, 1380, 1060])]
+        hd_only_canv = [(hd_only_wins[0][0], (1280, 960),
+                         [100, 100, 1380, 1060], 1.0, "win")]
+        feng.keju_tool._follow_ts = 0.0
+        n_before = len(fapp.logs)
+        with patch(find_client_windows=lambda: (list(hd_only_wins), [])), \
+                patch(find_client_canvases=lambda: (list(hd_only_canv), [])):
+            feng.keju_tool._follow_clients()
+        st = feng.keju_tool.ui_state()
+        check("跟随:空手期只有 HD 客户端 -> 记红名不收编,等支持档自动接入",
+              st["unsup"] == ["角色己"]
+              and st["names"] == ["角色己", None, None, None, None]
+              and feng.keju_tool._auto_boxes is None
+              and feng.keju_tool._readopt is True
+              and any("角色己(1280×960)分辨率不支持,已暂停观测" in m
+                      for m in fapp.logs[n_before:]),
+              f"unsup={st['unsup']} boxes={feng.keju_tool._auto_boxes} "
+              f"logs={[m for m in fapp.logs[n_before:] if '客户端' in m][:2]}")
+        feng.keju_tool.set_unsup(None)
+
+        # 只有名字还没画布(登录/loading 中):不下结论 —— 不标红也不收编
+        feng.keju_tool.set_auto_boxes(None)
+        feng.keju_tool._readopt = True
+        feng.keju_tool.set_unsup(None)
+        name_only = [("梦幻西游 ONLINE - (湖北2区[黄鹤楼] - 角色庚[7])",
+                      [100, 100, 1380, 1060])]
+        feng.keju_tool._follow_ts = 0.0
+        n_before = len(fapp.logs)
+        with patch(find_client_windows=lambda: (list(name_only), [])), \
+                patch(find_client_canvases=lambda: ([], [])):
+            feng.keju_tool._follow_clients()
+        st = feng.keju_tool.ui_state()
+        check("跟随:有名字没画布(登录/loading)不下结论 —— 不标红不收编",
+              st["unsup"] == []
+              and st["names"] == [None] * core.MAX_CLIENTS
+              and feng.keju_tool._auto_boxes is None
+              and not fapp.logs[n_before:],
+              f"unsup={st['unsup']} logs={fapp.logs[n_before:]}")
+
+        # 退出登录:标题抠不出角色名 -> 认出是谁,静默移除观测区域(不提示)
         logout_wins = [("梦幻西游 ONLINE", [100, 100, 740, 580]),
                        ("梦幻西游 ONLINE - (湖北2区[黄鹤楼] - 角色乙[2])",
                         [900, 100, 1560, 600])]
@@ -2144,13 +2414,12 @@ def sec_gui():
         with patch(find_client_windows=lambda: (list(logout_wins), [])), \
                 patch(find_client_canvases=lambda: (list(logout_canv), [])):
             feng.keju_tool._follow_clients()
-        check("跟随:客户端退出登录 -> 提示并移除观测区域,其余照常跟随",
+        check("跟随:客户端退出登录 -> 静默移除观测区域,其余照常跟随",
               feng.keju_tool._auto_boxes == [box_b]
               and feng.keju_tool.ui_state()["names"] == [
                   "角色乙", None, None, None, None]
               and feng.keju_tool._readopt is False
-              and any("角色甲已退出登录，已移除观测区域"
-                      in m for m in fapp.logs[n_before:])
+              and not any("退出登录" in m for m in fapp.logs[n_before:])
               and any("1 个客户端位置变了,已自动跟随" in m
                       for m in fapp.logs[n_before:]),
               f"boxes={feng.keju_tool._auto_boxes} "
@@ -2158,7 +2427,7 @@ def sec_gui():
               f"names={feng.keju_tool.ui_state()['names']} "
               f"logs={[m for m in fapp.logs[n_before:] if '客户端' in m][:2]}")
 
-        # 退出登录(全部):两台都退到登录界面 -> 全部移除,进入等待重登状态
+        # 退出登录(全部):两台都退到登录界面 -> 全部静默移除,进入等待重登
         allout_wins = [("梦幻西游 ONLINE", [100, 100, 740, 580]),
                        ("梦幻西游 ONLINE", [900, 100, 1560, 600])]
         feng.keju_tool.set_auto_boxes([box_a, box_b], ["角色甲", "角色乙"])
@@ -2167,14 +2436,11 @@ def sec_gui():
         with patch(find_client_windows=lambda: (list(allout_wins), [])), \
                 patch(find_client_canvases=lambda: ([], [])):
             feng.keju_tool._follow_clients()
-        check("跟随:全部退出登录 -> 全部移除,进入等待重登状态(自动收编待命)",
+        check("跟随:全部退出登录 -> 全部静默移除,进入等待重登状态",
               feng.keju_tool._auto_boxes is None
               and feng.keju_tool._readopt is True
               and fapp.cfg["keju"]["regions"] == [None] * core.MAX_CLIENTS
-              and any("角色甲已退出登录，已移除观测区域"
-                      in m for m in fapp.logs[n_before:])
-              and any("角色乙已退出登录，已移除观测区域"
-                      in m for m in fapp.logs[n_before:]),
+              and not any("退出登录" in m for m in fapp.logs[n_before:]),
               [m for m in fapp.logs[n_before:] if "客户端" in m][:2])
 
         # 重新登录(换了角色):等待重登状态 -> 自动重新收编,无需手动刷新
@@ -2255,6 +2521,52 @@ def sec_gui():
               f"boxes={feng.keju_tool._auto_boxes} "
               f"logs={[m for m in fapp.logs[n_before:] if '客户端' in m][:2]}")
 
+        # 已观测满 5 个:再识别的新客户端直接丢弃(记一次日志,不重复刷屏)
+        five = [(f"梦幻西游 ONLINE - (湖北2区[黄鹤楼] - 角色甲{i}[{i}])",
+                 [i * 800, 100, i * 800 + 740, 580]) for i in range(1, 6)]
+        five_canv = [(w[0], (640, 480), [w[1][0] + 10, 110, w[1][2] - 10, 570],
+                      1.0, "win") for w in five]
+        sixth = ("梦幻西游 ONLINE - (湖北2区[黄鹤楼] - 角色己[6])",
+                 [4800, 100, 5540, 580])
+        sixth_canv = (sixth[0], (640, 480), [4810, 110, 5530, 570], 1.0, "win")
+        full_names = [f"角色甲{i}" for i in range(1, 6)]
+        feng.keju_tool.set_auto_boxes([w[1] for w in five], full_names)
+        feng.keju_tool._follow_ts = 0.0
+        n_before = len(fapp.logs)
+        with patch(find_client_windows=lambda: (list(five) + [sixth], [])), \
+                patch(find_client_canvases=lambda:
+                      (list(five_canv) + [sixth_canv], [])):
+            feng.keju_tool._follow_clients()
+            feng.keju_tool._follow_ts = 0.0
+            feng.keju_tool._follow_clients()
+        check("跟随:已观测满 5 个 -> 新客户端直接丢弃(只记一次日志)",
+              feng.keju_tool._auto_boxes == [w[1] for w in five]
+              and feng.keju_tool.ui_state()["names"][:5] == full_names
+              and "角色己" not in feng.keju_tool.ui_state()["names"]
+              and feng.keju_tool._dropped == ["角色己"]
+              and sum(1 for m in fapp.logs[n_before:] if "已观测满" in m) == 1
+              and not any("检测到新客户端 角色己" in m
+                          for m in fapp.logs[n_before:]),
+              f"dropped={feng.keju_tool._dropped} "
+              f"logs={[m for m in fapp.logs[n_before:] if '客户端' in m][:2]}")
+
+        # 槽位空出(关掉一个):丢弃的客户端自动接入,丢弃标记摘掉
+        feng.keju_tool._follow_ts = 0.0
+        n_before = len(fapp.logs)
+        with patch(find_client_windows=lambda: (list(five[1:]) + [sixth], [])), \
+                patch(find_client_canvases=lambda:
+                      (list(five_canv[1:]) + [sixth_canv], [])):
+            feng.keju_tool._follow_clients()
+        st = feng.keju_tool.ui_state()
+        check("跟随:满员丢弃后槽位空出 -> 自动接入并摘掉丢弃标记",
+              feng.keju_tool._auto_boxes == [w[1] for w in five[1:]] + [sixth[1]]
+              and st["names"][:5] == full_names[1:] + ["角色己"]
+              and feng.keju_tool._dropped == []
+              and any("检测到新客户端 角色己(640×480),已自动纳入观测" in m
+                      for m in fapp.logs[n_before:]),
+              f"boxes={feng.keju_tool._auto_boxes} "
+              f"dropped={feng.keju_tool._dropped}")
+
         # 悬停角色名框:按角色名现场匹配(位置无关 —— 画布在别处、窗口拖走
         # 后老区域过期都能查到);未登录/未定位有说明,离开即收
         app._set("regions", [[100, 150, 920, 770], None, None, None, None])
@@ -2275,11 +2587,25 @@ def sec_gui():
             tip_text3 = app._client_tip.tip_cv.itemcget(
                 app._client_tip.tip_tid, "text")
             app.on_client_hover_end(0)
-        check("胶囊悬停:按角色名现查分辨率(位置无关),未登录/未定位有说明,离开即收",
+        # 暂停观测(分辨率不支持)的槽位:红名 + 悬停直接说明,不查分辨率
+        app.engine.keju_tool.set_unsup(["暂停甲"])
+        app._refresh_regions()
+        with patch(find_client_canvases=lambda: ([], [])):
+            app.on_client_hover_start(1)
+            tip_text4 = app._client_tip.tip_cv.itemcget(
+                app._client_tip.tip_tid, "text")
+            app.on_client_hover_end(0)
+        name_fill = app.client_capsules[1].itemcget("name", "fill")
+        app.engine.keju_tool.set_unsup(None)
+        app._refresh_regions()
+        check("胶囊悬停:按角色名现查分辨率(位置无关),未登录/未定位/暂停观测有说明,离开即收",
               tip_text == "800×600" and tip_text2 == "未定位"
-              and tip_text3 == "未登录角色,没有游戏画面"
+              and tip_text3 == "还没读到游戏画面"
+              and tip_text4 == "分辨率不支持"
+              and name_fill == ui_keju.UNSUP_RED
               and not getattr(app, "_client_tip", None),
-              f"{tip_text!r} / {tip_text2!r} / {tip_text3!r}")
+              f"{tip_text!r} / {tip_text2!r} / {tip_text3!r} / "
+              f"{tip_text4!r} / {name_fill}")
 
         app.cfg["keju"]["regions"] = [None] * core.MAX_CLIENTS
         app.engine.keju_tool.set_auto_boxes(None)
@@ -2327,6 +2653,47 @@ def sec_gui():
               and core.canvas_game_res((800, 600), 96) == core.canvas_game_res(
                   (800, 600), 0)                                        # dpi 缺省兜底
               and core.canvas_game_res((812, 663), 96) == (812, 663))   # 非标准画布不猜
+
+        # 回归(2026-11-13 真机 stderr 实锤):枚举列出窗口后、查询画布前,
+        # 窗口销毁(关窗竞态)会让 canvas_of 返回 None —— 旧代码直接解包
+        # TypeError,异常在 ctypes 回调里被吞掉,但 EnumWindows 收到 FALSE
+        # 就提前收工,当拍还在场的窗口全部漏掉。僵尸窗故意排在真窗前面:
+        # 修复前枚举在僵尸窗处中断、真窗收不到;修复后照常收齐。
+        def _zomb_get_client_rect(hwnd, r):
+            r = r._obj                 # 真代码传 byref(rect),拿回本体再填
+            if hwnd == 11:             # 僵尸窗:查询时已销毁
+                return 0
+            r.right, r.bottom = 1024, 768      # 真窗:独立窗口版 1024×768
+            return 1
+
+        def _zomb_client_to_screen(_hwnd, pt):
+            pt = pt._obj
+            pt.x, pt.y = 100, 200
+            return 1
+
+        fake_u32 = types.SimpleNamespace(
+            GetWindowTextLengthW=lambda _h: len(_boot_title),
+            GetWindowTextW=lambda _h, buf, _n: setattr(buf, "value", _boot_title),
+            GetClassNameW=lambda _h, buf, _n: setattr(
+                buf, "value", client_common.CANVAS_WINDOW_CLASS),
+            IsWindowVisible=lambda _h: 1,
+            IsIconic=lambda _h: 0,
+            EnumWindows=lambda fn, _lp: next(
+                (0 for h in (11, 12) if not fn(h, 0)), 1),
+            GetClientRect=_zomb_get_client_rect,
+            ClientToScreen=_zomb_client_to_screen,
+            MonitorFromPoint=lambda _pt, _fl: 0,   # 拿不到显示器 -> dpi 96
+        )
+        import ctypes as _ct
+        real_windll, _ct.windll = _ct.windll, types.SimpleNamespace(
+            user32=fake_u32, shcore=None)
+        try:
+            got_z = real_enum()
+        finally:
+            _ct.windll = real_windll
+        check("画布枚举:窗口中途销毁(canvas_of None)不再打断整轮枚举",
+              got_z == ([(_boot_title, (1024, 768), [100, 200, 1124, 968],
+                         1.0, "win")], []), str(got_z))
 
         # 画布精确口径:窗口里配到画布 -> 按游戏设置分辨率判,窗口拉伸不参与
         # (1015×829 的拉伸窗配到 800×600 画布 = 支持;815×679 配到
@@ -2409,7 +2776,7 @@ def sec_gui():
               and json.load(open(sb.config, encoding="utf-8"))["app"]["skin"]
               == "light"
               and app.mode_btn.label() == "科举会试 ▾"
-              and app.refresh_btn.label() == "客户端刷新"
+              and not hasattr(app, "refresh_btn")   # 刷新钮已删,重建也不复活
               and app.hero_canvas.find_withtag("q")      # 题目还在(重画过)
               and app.status_dot.itemcget("dot", "fill")
               == ui_widgets.StatusDot.RED)
@@ -2424,6 +2791,8 @@ def sec_gui():
         app.on_mini()
         app._drain_logs()
         app.mini.update()
+        app._drain_logs()      # 锚定按 reqwidth 算,文字刚换时可能落后一拍;真实
+        app.mini.update()      # 运行 _drain_logs 每 50ms 会重新收口,这里同样收两拍
         sw = app.mini.winfo_screenwidth()
         x, w = app.mini.winfo_x(), app.mini.winfo_width()
         check("界面:迷你窗大字显示最近答案",
@@ -3132,7 +3501,7 @@ def sec_extra():
         eng.keju_tool.keju_cycle(True)
         check("cycle:三大学士模式下的碎片文本(<4 字)-> 跳过", not app.said)
 
-        eng, app = mk_engine(bank, [blk("完全无关的一段文字内容", 100, 200)],
+        eng, app = mk_engine(bank, [blk("下列哪种说法完全不对？", 100, 200)],
                              cfg={"keju": {"exam_mode": False}})
         eng.keju_tool.keju_cycle(True)
         check("cycle:区域文字与题库对不上 -> 记未匹配(不播报)",
@@ -4088,9 +4457,14 @@ def sec_extra_errors():
 
         # ---- 单实例互斥体:同进程第二次必判"已运行" ----
         first = keju._single_instance()
-        second = keju._single_instance()
-        check("单实例:同进程第二次创建互斥体必判已运行",
-              second is False, f"first={first} second={second}")
+        if first:
+            second = keju._single_instance()
+            check("单实例:同进程第二次创建互斥体必判已运行",
+                  second is False, f"first={first} second={second}")
+        else:
+            # 应用正在跑:互斥体被外部持有,本进程测不了同进程口径
+            check("单实例:互斥体被外部持有(应用在跑),本项跳过", True,
+                  "关掉应用后重跑可测同进程口径")
 
         class BadShcore:
             def SetProcessDpiAwareness(self, v):

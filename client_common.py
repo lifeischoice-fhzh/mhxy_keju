@@ -118,9 +118,13 @@ def find_client_canvases():
         if user32.IsIconic(hwnd):
             minimized.append(title or "梦幻西游")      # 最小化:截不到画面
             return True
-        canvas, mode = canvas_of(hwnd)
-        if not canvas:
+        # 窗口可能在枚举列出它之后、查询到这里之前销毁(关窗竞态):
+        # canvas_of 返回 None 就跳过。回调里抛异常会被 ctypes 吞掉,但
+        # EnumWindows 收到 FALSE 就提前收工 —— 当拍在场窗口全会漏掉。
+        got = canvas_of(hwnd)
+        if not got:
             return True
+        canvas, mode = got
         if (canvas[2] - canvas[0] < CLIENT_MIN_W
                 or canvas[3] - canvas[1] < CLIENT_MIN_H
                 or canvas[0] < -10000):               # 最小化窗口的坐标是 -32000
@@ -165,21 +169,26 @@ def find_client_canvases():
     return found, minimized
 
 
-def client_canvas(box):
+def client_canvas(box, title=None):
     """客户区矩形 -> 里面那层游戏画面的 [画布矩形, 游戏分辨率, 版式];没有 None。
 
     画布按"矩形落在窗口里"配对(box 是客户区、画布是它里面的子窗口,同一
-    进程枚举,坐标系一致;多开窗口互相压住时可能配错台,与降妖伏魔同款
-    取舍)。游戏分辨率由 find_client_canvases 按画布尺寸 ÷ 倍率算出,精确
-    等于游戏设置的那一档(见 canvas_game_res);版式 "tab"/"win" 随画布一起
-    给,只用于日志/存档文件名(比例表/框表不按版式分)。
+    进程枚举,坐标系一致)。**传 title 时只认标题相同的那块画布**:多开
+    窗口互相压住时,甲的窗口框里可能躺着乙的画布,纯几何配会配错台
+    (HD 档被邻居的 640×480 画布误判成支持),按标题配才是本尊;不传
+    title 维持纯几何配对(降妖伏魔同款取舍,那边调用不受影响)。游戏
+    分辨率由 find_client_canvases 按画布尺寸 ÷ 倍率算出,精确等于游戏
+    设置的那一档(见 canvas_game_res);版式 "tab"/"win" 随画布一起给,
+    只用于日志/存档文件名(比例表/框表不按版式分)。
     """
     try:
         canvases, _minimized = find_client_canvases()
     except Exception:
         return None
     x0, y0, x1, y1 = [int(v) for v in box]
-    for _title, res, rect, _ratio, mode in canvases:
+    for wtitle, res, rect, _ratio, mode in canvases:
+        if title is not None and wtitle != title:
+            continue
         cx0, cy0, cx1, cy1 = (int(v) for v in rect)
         if cx0 >= x0 and cy0 >= y0 and cx1 <= x1 and cy1 <= y1:
             return [[cx0, cy0, cx1, cy1], (int(res[0]), int(res[1])), mode]
@@ -311,14 +320,16 @@ GAME_RES_STEPS = ((640, 480), (800, 600), (1024, 768))
 MIN_GAME_RES = GAME_RES_STEPS[0]          # 最小档:整窗口截图最快,实测最划算
 
 
-def client_size_info(box):
+def client_size_info(box, title=None):
     """客户端窗口 -> (尺寸说明文字, 是否已经是最小分辨率)。
 
     文案按调用场景写全(定位日志只拼头,跳过原因全靠这段):配到画布且
     支持 -> 游戏设置分辨率的精确值(画布口径,见 client_canvas);配到
-    画布但不支持 -> 不支持+已跳过;没画布(登录窗/没进角色)-> 未登录+已跳过。
+    画布但不支持 -> 不支持+已跳过;没画布按标题分两说 —— 抠得出角色名
+    是"已登录但画布还没出来"(登录/加载过渡),抠不出才是真没登录。
+    title 透传 client_canvas(按标题配对,防多开窗口重叠时配错台)。
     """
-    found = client_canvas(box)
+    found = client_canvas(box, title)
     if found:
         w, h = found[1]
         if (w, h) in SUPPORTED_RES:
@@ -326,6 +337,8 @@ def client_size_info(box):
         return f"游戏分辨率 {w}×{h} 不支持,已跳过", False
     w = max(1, int(box[2]) - int(box[0]))
     h = max(1, int(box[3]) - int(box[1]))
+    if title and client_name(title):
+        return f"角色已登录,还没读到游戏画面(客户区 {w}×{h}),已跳过", False
     return f"未登录角色,没有游戏画面(客户区 {w}×{h}),已跳过", False
 
 
