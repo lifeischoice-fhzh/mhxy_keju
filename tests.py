@@ -227,10 +227,14 @@ def sec_config():
             json.dump({"keju": {"exam_mode": False}}, f)
         check("配置:老 exam_mode=False 迁移成「三大学士」模式",
               load_config()["keju"]["mode"] == "三大学士")
-        with open(sb.config, "w", encoding="utf-8") as f:
+        with open(sb.config, "w", encoding="utf-8") as f:   # 老版 5 个模式名
             json.dump({"keju": {"mode": "车迟斗法", "exam_mode": True}}, f)
-        check("配置:新 mode 键优先(exam_mode 只是识别管线的旧键)",
-              load_config()["keju"]["mode"] == "车迟斗法")
+        check("配置:旧版模式名按族收编(车迟斗法 -> 副本答题,布尔不再参与)",
+              load_config()["keju"]["mode"] == "副本答题")
+        with open(sb.config, "w", encoding="utf-8") as f:
+            json.dump({"keju": {"mode": "科举殿试", "exam_mode": False}}, f)
+        check("配置:旧版锚点族(科举殿试)-> 科举答题",
+              load_config()["keju"]["mode"] == "科举答题")
 
         with open(sb.config, "w", encoding="utf-8") as f:
             f.write("{坏掉的 json")
@@ -653,6 +657,8 @@ def sec_options():
               and tools_keju._opt_hit_strict(normalize("一元复始"), "一元复始"))
 
         # 哨兵端到端:答案不在当屏选项 -> 压住不播报,但选项照常入库
+        # (压答是自动路径的闸:手动识别放行,2026-11-16 起;压答用例一律
+        # 走 keju_cycle(False) 自动轮询触发)
         sbank = make_bank(os.path.join(sb.dir, "sentinel_bank.json"), [
             {"q": "仓库全部整理消耗多少体力", "a": "200"}])
         eng, app = mk_engine(sbank, [blk("御前科举大赛第1关：这一关考的是综合。"
@@ -662,7 +668,7 @@ def sec_options():
                                      blk("0", 300, 240), blk("50", 400, 240)])
         eng.keju_tool.options = OptionsStore(
             os.path.join(sb.dir, "sentinel_options.json"))
-        eng.keju_tool.keju_cycle(True)
+        eng.keju_tool.keju_cycle(False)
         check("哨兵:答案不在当屏选项 -> 不播报",
               not app.said
               and any("未播报" in m for m in app.logs), app.logs[-1:])
@@ -680,7 +686,7 @@ def sec_options():
                                        blk("0", 300, 240), blk("50", 400, 240)])
         eng2.keju_tool.options = OptionsStore(
             os.path.join(sb.dir, "sentinel2_options.json"))
-        eng2.keju_tool.keju_cycle(True)
+        eng2.keju_tool.keju_cycle(False)
         check("哨兵:答案在当屏选项里 -> 照常播报",
               app2.said == ["200"], f"said={app2.said}")
 
@@ -696,8 +702,8 @@ def sec_options():
                     blk("黄酒名品“加饭酒”的产地在哪", 100, 200),
                     blk("和尚可前往道", 700, 210),
                     blk("余时间1小时5", 700, 230)],
-            cfg={"keju": {"exam_mode": False, "mode": "车迟斗法"}})
-        eng3.keju_tool.keju_cycle(True)
+            cfg={"keju": {"exam_mode": False, "mode": "副本答题"}})
+        eng3.keju_tool.keju_cycle(False)
         check("哨兵:HUD/名牌短行不算选项(漏读真选项也不误压)",
               app3.said == ["浙江"] and not any("未播报" in m for m in app3.logs),
               f"said={app3.said} logs={app3.logs[-2:]}")
@@ -719,7 +725,7 @@ def sec_options():
             return mblocks if calls["n"] == 1 else [blk("长沙马王堆", 100, 0)]
 
         eng4.ocr = types.SimpleNamespace(recognize_blocks=_ocr2)
-        eng4.keju_tool.keju_cycle(True)
+        eng4.keju_tool.keju_cycle(False)
         check("哨兵:复检读到漏检的答案行 -> 照常播报",
               app4.said == ["长沙马王堆"]
               and any("选项复检" in m for m in app4.logs),
@@ -731,7 +737,7 @@ def sec_options():
                         "题目：仓库全部整理消耗多少体力", 100, 200),
                     blk("20", 100, 240), blk("30", 200, 240),
                     blk("0", 300, 240), blk("50", 400, 240)])
-        eng5.keju_tool.keju_cycle(True)
+        eng5.keju_tool.keju_cycle(False)
         check("哨兵:复检仍读不到答案 -> 照旧压答",
               not app5.said and any("未播报" in m for m in app5.logs),
               f"said={app5.said} logs={app5.logs[-2:]}")
@@ -759,7 +765,7 @@ def sec_options():
             recognize_blocks=lambda img, **kw: list(so_blocks))
         eng7.keju_tool.options = OptionsStore(
             os.path.join(sb.dir, "so_store.json"))
-        eng7.keju_tool.keju_cycle(True)
+        eng7.keju_tool.keju_cycle(False)
         check("哨兵:仓库第二意见(历史选项与当屏一致)-> 放行播报",
               app7.said == ["甲乙丙丁"]
               and any("仓库印证" in m for m in app7.logs),
@@ -775,7 +781,7 @@ def sec_options():
                      options=["一二三四", "五六七八", "九十百千", "子丑寅卯"])
         store8.save()
         eng8.keju_tool.options = store8
-        eng8.keju_tool.keju_cycle(True)
+        eng8.keju_tool.keju_cycle(False)
         check("哨兵:历史选项里没有答案的条目不采信 -> 照旧压答",
               not app8.said and any("未播报" in m for m in app8.logs),
               f"said={app8.said} logs={app8.logs[-2:]}")
@@ -823,6 +829,35 @@ def sec_options():
         check("扫描区:跟随同步 画布×DLG_RATIOS(800 档 0.16/0.48/0.85/0.78)",
               got[0] == [134, 294, 686, 474] and got[1:] == [None] * 4,
               f"rects={got}")
+        exam_got = eng8.keju_tool._exam_rects
+        check("扫描区:跟着同步 画布×EXAM_RATIOS(800 档 0.106/0.155/0.893/0.84)",
+              exam_got[0] == [90, 99, 720, 510] and exam_got[1:] == [None] * 4,
+              f"rects={exam_got}")
+
+        # 科举答题也按答题面板截(2026-11-16 真机定稿 EXAM_RATIOS):
+        # 不再整窗扫;画布框没同步到的拍退回整窗
+        ebank = make_bank(os.path.join(sb.dir, "exam_scan.json"), [
+            {"q": "轻若烟雾薄如蝉翼的丝织品出土于哪座陵墓", "a": "长沙马王堆"}])
+        eblocks = [blk("御前科举大赛第1关：这一关考的是历史。"
+                       "题目：轻若烟雾薄如蝉翼的丝织品出土于哪座陵墓", 100, 200)]
+        eng9, app9 = mk_engine(ebank, eblocks, cfg={"keju": {"exam_mode": True}})
+        eng9.screen = _RecScreen()
+        eng9.keju_tool._follow_clients = lambda: None
+        eng9.keju_tool._auto_boxes = [[0, 0, 60, 30]]
+        eng9.keju_tool._exam_rects = [[5, 8, 55, 25]]
+        eng9.keju_tool.keju_cycle(True)
+        check("扫描区:科举答题按画布×EXAM_RATIOS 截",
+              grabbed[-1] == (5, 8, 55, 25) and app9.said == ["长沙马王堆"],
+              f"grabbed={grabbed[-1]} said={app9.said}")
+
+        eng10, _app10 = mk_engine(ebank, eblocks,
+                                  cfg={"keju": {"exam_mode": True}})
+        eng10.screen = _RecScreen()
+        eng10.keju_tool._follow_clients = lambda: None
+        eng10.keju_tool._auto_boxes = [[0, 0, 60, 30]]
+        eng10.keju_tool.keju_cycle(True)
+        check("扫描区:科举答题没同步到画布框的拍退回整窗",
+              grabbed[-1] == (0, 0, 60, 30), f"got={grabbed[-1]}")
 
 
 # ------------------------------------------------------- 3 题库更新(离线桩)
@@ -1481,7 +1516,7 @@ def sec_engine():
 
     calls = [0]
 
-    def counting_ocr(img):
+    def counting_ocr(img, **kw):
         calls[0] += 1
         return [blk(HDR + QA, 100, 200)]
 
@@ -1563,7 +1598,7 @@ def sec_engine():
         np.zeros((30, 60, 3), np.uint8))[1]
     eng2.keju_tool.watching = True
     eng2.keju_tool.keju_cycle(False)
-    check("御前科举:仍扫整个客户端窗口(不缩放)",
+    check("科举答题:画布框没同步到 -> 退回整窗(不缩放)",
           grabbed2 and grabbed2[-1] == (0, 0, 60, 30), f"截了 {grabbed2[-1:]}")
 
     eng, app = mk_engine(bank, [], cfg=NO_REGIONS)
@@ -1631,6 +1666,47 @@ def sec_engine():
           any("没认出科举题目" in m and "三大学士" in m for m in app.logs)
           and not any("锚点" in m for m in app.logs),
           [m for m in app.logs if "没认出" in m][:1])
+
+    # ---- 回归(2026-11-16):自动失败的画面按手动"换一种读法"才可能救回 ----
+    # 手动这轮 OCR 用更高的 det 输入下限,自动保持引擎默认 —— 原样重读
+    # 只会复现同一次失败(同批像素 + 同一管线)
+    lims = []
+    eng, app = mk_engine(bank, [blk(HDR + QA, 100, 200)])
+    eng.ocr = types.SimpleNamespace(recognize_blocks=lambda img, **kw: (
+        lims.append(kw.get("limit_side")), [blk(HDR + QA, 100, 200)])[1])
+    eng.keju_tool.keju_cycle(True)
+    check("cycle:手动识别抬高 det 输入下限(同批像素换细读)",
+          lims == [tools_keju.MANUAL_DET_LIMIT] and app.said == ["答案甲"],
+          f"lims={lims} said={app.said}")
+    lims2 = []
+    eng, app = mk_engine(bank, [blk(HDR + QA, 100, 200)])
+    eng.ocr = types.SimpleNamespace(recognize_blocks=lambda img, **kw: (
+        lims2.append(kw.get("limit_side")), [blk(HDR + QA, 100, 200)])[1])
+    eng.keju_tool.keju_cycle(False)
+    check("cycle:自动轮询保持引擎默认 det 下限",
+          lims2 == [None], f"lims2={lims2}")
+
+    # ---- 回归(2026-11-16):哨兵只拦自动路径,手动是点名要答案 ----
+    # 题库答案不在当屏选项里:自动压答不播,手动放行播报但留痕
+    mbank = make_bank(os.path.join(tempfile.mkdtemp(prefix="keju_manual_"),
+                                   "bank.json"),
+                      [{"q": "仓库全部整理消耗多少体力", "a": "200"}])
+    sblocks = [blk("御前科举大赛第1关：这一关考的是综合。题目：仓库全部整理消耗多少体力",
+                   100, 200),
+               blk("20", 100, 240), blk("30", 200, 240),
+               blk("0", 300, 240), blk("50", 400, 240)]
+    eng, app = mk_engine(mbank, sblocks)
+    eng.keju_tool.keju_cycle(True)
+    check("cycle:手动识别放行哨兵(答案不在当屏选项,note 留痕)",
+          app.said == ["200"] and app.last_answer == "200"
+          and any("哨兵放行" in m for m in app.logs)
+          and any("可能已过期" in m for m in app.logs),
+          f"said={app.said} logs={app.logs[-2:]}")
+    eng, app = mk_engine(mbank, sblocks)
+    eng.keju_tool.keju_cycle(False)
+    check("cycle:自动路径哨兵照压(手动放行不影响自动)",
+          not app.said and app.last_answer == "选项不符,已压",
+          f"said={app.said} last={app.last_answer!r}")
 
     # ---- 回归(2026-11-08 会试实测):关卡头整行被 OCR 读坏 ----
     # 锚点认不出、题干本体还在:本区域刚答过题(兜底窗口内)时按题干兜底播报
@@ -1776,7 +1852,7 @@ def sec_engine():
         def warmup(self):
             pass
 
-        def recognize_blocks(self, img):
+        def recognize_blocks(self, img, **kw):
             self.n += 1
             return self.blocks
 
@@ -1909,11 +1985,18 @@ def sec_gui():
             ids = cv.find_withtag(tag)
             return cv.itemcget(ids[0], "text") if ids else ""
 
+        def caps_dot(i):
+            """第 i 个胶囊上的状态点颜色;取不到返回空串。"""
+            cv = app.client_capsules[i]
+            ids = cv.find_withtag("dot")
+            return cv.itemcget(ids[0], "fill") if ids else ""
+
         check("界面:启动即自动定位,定位到几个就显示几个名字框",
               app.cfg["keju"]["regions"][0] == [100, 150, 800, 650]
               and len(app.cfg["keju"]["regions"]) == core.MAX_CLIENTS
               and caps_text(0) == "祭花′"
               and not app.client_capsules[1].grid_info()
+              and caps_dot(0) == ui_keju.DOT_ON          # 观测中:绿灯
               and app.engine.keju_tool.watching is True,   # 自动监听默认开
               f'{caps_text(0)}/可见 {len(app.client_capsules[1].grid_info())}')
 
@@ -1965,19 +2048,20 @@ def sec_gui():
               and "该出现" in filetxt and "公共的行" in filetxt,
               "log_box 还在" if hasattr(app, "log_box") else "文件缺行")
 
-        check("界面:默认控件(名字框 5 / 圆角钮齐 / 占位+状态灯 / 默认科举会试)",
+        app._drain_logs()      # 状态点随刷新链走:先刷一拍再读颜色
+        check("界面:默认控件(名字框 5 / 圆角钮齐 / 占位+状态点 / 默认科举答题)",
               len(app.client_capsules) == core.MAX_CLIENTS
-              and app.mode_btn.label() == "科举会试 ▾"
+              and app.mode_btn.label() == "科举答题 ▾"
               and app.manual_btn.label() == "手动识别"
               and app.mini_btn.label() == "迷你置顶"
               and app.mute_btn.label() == "语音静音"
               and app.skin_btn.label() == "换肤"
               and app.root.title() == "mhxy_keju"
               and app.hero_canvas.find_withtag("ph")     # 没信息时显示占位
-              and app.hero_canvas.find_withtag("mode_hint")  # 切换模式的引导常驻
+              and not app.hero_canvas.find_withtag("mode_hint")  # 模式引导已删
               and not app._mode_menu_open
-              and app.status_dot.itemcget("dot", "fill")
-              == ui_widgets.StatusDot.RED
+              and caps_dot(0) == ui_keju.DOT_OFF    # 没在监听:胶囊红灯
+              and not hasattr(app, "status_dot")    # 原题目卡状态灯已删
               and not any(hasattr(app, a) for a in
                           ("refresh_btn", "watch_btn", "interval_var",
                            "reward_var", "round_var", "earn_detail_btn",
@@ -1997,10 +2081,12 @@ def sec_gui():
 
         app.engine.keju_tool.watching = True
         app._drain_logs()
-        check("界面:监听中 -> 状态灯变绿(闪烁)",
-              app.status_dot.itemcget("dot", "fill")
-              == ui_widgets.StatusDot.GREEN)
+        check("界面:监听中 -> 已定位胶囊亮绿灯",
+              caps_dot(0) == ui_keju.DOT_ON, caps_dot(0))
         app.engine.keju_tool.watching = False
+        app._drain_logs()
+        check("界面:暂停监听 -> 胶囊转红灯",
+              caps_dot(0) == ui_keju.DOT_OFF, caps_dot(0))
 
         app.cfg["keju"]["regions"][0] = [10, 20, 30, 40]
         app.engine.keju_tool.set_auto_boxes(None)   # 引擎重启后:名字/基准都没了
@@ -2023,11 +2109,11 @@ def sec_gui():
         app.engine.keju_tool.set_auto_boxes(None)   # 还原:后续用例没名字
         app._refresh_regions()
 
-        check("模式:五个模式分两族(科举会试/殿试=锚点,后三个=无锚点)",
-              [n for n, exam in core.KEJU_MODES if exam]
-              == ["科举会试", "科举殿试"]
+        check("模式:三个模式分两族(科举答题=锚点,三大学士/副本答题=无锚点)",
+              core.KEJU_MODE_NAMES == ("科举答题", "三大学士", "副本答题")
+              and [n for n, exam in core.KEJU_MODES if exam] == ["科举答题"]
               and all(not exam for n, exam in core.KEJU_MODES
-                      if n in ("三大学士", "金兜兕", "车迟斗法")))
+                      if n in ("三大学士", "副本答题")))
 
         app._set_exam_mode(False)          # 旧接口:映射到「三大学士」
         with open(sb.config, encoding="utf-8") as f:
@@ -2043,35 +2129,40 @@ def sec_gui():
               mode_line == ["[识别模式]三大学士"], mode_line[:1])
 
         app.mode_btn.invoke()             # 走按钮本身:放下模式下拉
-        check("界面:点模式钮放下 5 个模式的下拉(当前项打勾)",
+        check("界面:点模式钮放下 3 个模式的下拉(行=按钮尺寸且左对齐,当前项右缘打勾)",
               app._mode_menu_open and bool(app.mode_menu.place_info())
               and [n for n, _b in app.mode_rows]
               == list(core.KEJU_MODE_NAMES)
-              and app.mode_rows[2][1].label() == "✓ 三大学士"
-              and app.mode_rows[0][1].label() == "科举会试",
+              and all(b._bw == ui_keju.BTN_W and b._bh == ui_keju.BTN_H
+                      and b._align == "w" for _n, b in app.mode_rows)
+              and app.mode_btn._align == "w"
+              and app.mode_rows[1][1].label() == "三大学士"
+              and app.mode_rows[1][1].trail() == "✓"
+              and app.mode_rows[0][1].label() == "科举答题"
+              and app.mode_rows[0][1].trail() == "",
               [b.label() for _n, b in app.mode_rows])
-        app.on_pick_mode("科举会试")
+        app.on_pick_mode("科举答题")
         with open(sb.config, encoding="utf-8") as f:
             saved3 = json.load(f)["keju"]
-        check("界面:下拉选「科举会试」-> 收面板 + 落盘 + 回到锚点族",
+        check("界面:下拉选「科举答题」-> 收面板 + 落盘 + 回到锚点族",
               not app._mode_menu_open
-              and app.cfg["keju"]["mode"] == "科举会试"
+              and app.cfg["keju"]["mode"] == "科举答题"
               and app.cfg["keju"]["exam_mode"] is True
-              and saved3["mode"] == "科举会试" and saved3["exam_mode"] is True
-              and app.mode_btn.label() == "科举会试 ▾"
+              and saved3["mode"] == "科举答题" and saved3["exam_mode"] is True
+              and app.mode_btn.label() == "科举答题 ▾"
               and [m for m in ui_logs() if m.startswith("[识别模式]")]
-              == ["[识别模式]三大学士", "[识别模式]科举会试"],
+              == ["[识别模式]三大学士", "[识别模式]科举答题"],
               app.mode_btn.label())
 
         app.on_toggle_mode()
         app._on_root_click(types.SimpleNamespace(widget=app.hero_canvas))
         check("界面:点主窗别处收起模式下拉", not app._mode_menu_open)
         app.on_toggle_mode()
-        app.on_pick_mode("金兜兕")
-        check("界面:选「金兜兕」-> 走无锚点族(底部对话带 + 全题干匹配)",
-              app.cfg["keju"]["mode"] == "金兜兕"
+        app.on_pick_mode("副本答题")
+        check("界面:选「副本答题」-> 走无锚点族(底部对话带 + 全题干匹配)",
+              app.cfg["keju"]["mode"] == "副本答题"
               and app.cfg["keju"]["exam_mode"] is False
-              and app.mode_btn.label() == "金兜兕 ▾",
+              and app.mode_btn.label() == "副本答题 ▾",
               app.mode_btn.label())
 
         app.last_question = "【第一道题的题干内容是什么?】"
@@ -2454,6 +2545,27 @@ def sec_gui():
               and not fapp.logs[n_before:],
               f"unsup={st['unsup']} logs={fapp.logs[n_before:]}")
 
+        # 改档瞬间画布配不上本尊(枚举里没有这块画布):被认领的观测槽位
+        # 照样记红名,不能静默把名字弄丢(2026-11-16 用户实测:切到不支持
+        # 档后胶囊直接消失,日志里一条"分辨率不支持"都没有)
+        feng.keju_tool.set_auto_boxes([box_a], ["角色甲"])
+        feng.keju_tool.set_unsup(None)
+        feng.keju_tool._readopt = False
+        feng.keju_tool._follow_ts = 0.0
+        n_before = len(fapp.logs)
+        with patch(find_client_windows=lambda: (raw_wins[:1], [])), \
+                patch(find_client_canvases=lambda: ([], [])):
+            feng.keju_tool._follow_clients()
+        st = feng.keju_tool.ui_state()
+        check("跟随:改档瞬间画布配不上 -> 名字照样记红名(不静默移除)",
+              feng.keju_tool._auto_boxes is None
+              and st["unsup"] == ["角色甲"]
+              and st["names"][0] == "角色甲"
+              and any("角色甲" in m and "暂停观测" in m
+                      for m in fapp.logs[n_before:]),
+              f"boxes={feng.keju_tool._auto_boxes} unsup={st['unsup']} "
+              f"logs={[m for m in fapp.logs[n_before:] if '客户端' in m][:2]}")
+
         # 退出登录:标题抠不出角色名 -> 认出是谁,静默移除观测区域(不提示)
         logout_wins = [("梦幻西游 ONLINE", [100, 100, 740, 580]),
                        ("梦幻西游 ONLINE - (湖北2区[黄鹤楼] - 角色乙[2])",
@@ -2827,11 +2939,11 @@ def sec_gui():
               app.skin == "light"
               and json.load(open(sb.config, encoding="utf-8"))["app"]["skin"]
               == "light"
-              and app.mode_btn.label() == "科举会试 ▾"
+              and app.mode_btn.label() == "科举答题 ▾"
               and not hasattr(app, "refresh_btn")   # 刷新钮已删,重建也不复活
               and app.hero_canvas.find_withtag("q")      # 题目还在(重画过)
-              and app.status_dot.itemcget("dot", "fill")
-              == ui_widgets.StatusDot.RED)
+              and len(app.client_capsules) == core.MAX_CLIENTS
+              and not hasattr(app, "status_dot"))   # 旧状态灯重建后也不复活
         app.on_toggle_skin()
         app._drain_logs()
         check("界面:再点换肤切回玄夜(深色)",
@@ -2918,7 +3030,7 @@ def sec_gui():
         app.cfg["keju"]["exam_mode"] = False
         check("界面:老配置只有 exam_mode -> 模式名按族回退",
               app._mode() == "三大学士")
-        app._set("mode", "科举会试")
+        app._set("mode", "科举答题")
         app._set("exam_mode", True)
         app.mode_btn.destroy()            # 按钮没了 -> 刷新要兜住
         app._refresh_mode_btn()
@@ -3316,7 +3428,9 @@ def sec_cli():
     check("模式:统计兼容老叫法,新名字原样保留",
           core.mode_label("普通") == "三大学士"
           and core.mode_label("御前科举") == core.DEFAULT_MODE
-          and core.mode_label("车迟斗法") == "车迟斗法"
+          and core.mode_label("科举会试") == "科举答题"
+          and core.mode_label("车迟斗法") == "副本答题"
+          and core.mode_label("金兜兕") == "副本答题"
           and core.mode_label("") == core.DEFAULT_MODE)
 
     check("测试运行器:--only 等号/空格两种写法都能选组",
@@ -3600,7 +3714,7 @@ def sec_extra():
             [0, 0, 60, 30], [100, 100, 160, 130]]}})
         seen = {"n": 0}
 
-        def _two_ocr(img):
+        def _two_ocr(img, **kw):
             seen["n"] += 1
             if seen["n"] == 1:
                 return [blk("完全无关的一段文字内容", 100, 200)]   # 1 号:没匹配
@@ -3646,7 +3760,7 @@ def sec_extra():
             def warmup(self):
                 pass
 
-            def recognize_blocks(self, img):
+            def recognize_blocks(self, img, **kw):
                 self.n += 1
                 return self.blocks
 

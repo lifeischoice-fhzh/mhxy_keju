@@ -49,7 +49,7 @@ MIN_MATCH_PCT = 80
 RESCUE_MIN_PCT = 50
 _QUOTED = re.compile(r'[“「『"]([^”」』"]{1,4})[”」』"]')
 
-# 无锚点模式(三大学士/金兜兕/车迟斗法)只扫底部题面对话框:整窗其余全是噪声,
+# 无锚点模式(三大学士/副本答题)只扫底部题面对话框:整窗其余全是噪声,
 # 还拖慢 OCR。对话框是固定 UI,按客户端占比框一条带,四周留足余量
 # (按 860×600 档实测对话框约横 6%~88%、纵 45%~70%)。
 PLAIN_BAND = (0.04, 0.42, 0.91, 0.73)   # (左, 上, 右, 下) 占整窗比例
@@ -68,6 +68,12 @@ EXAM_FALLBACK_S = 120
 # 次数用完就停,画面真变了会重新给预算)
 RECHECK_DELAY_S = 2.0
 RECHECK_MAX = 3
+
+# 手动识别的 det 输入下限:自动轮询走引擎默认(736),手动这颗钮的价值
+# 在"同批像素换一种读法" —— 自动已经失败的画面,原样重读只会复现同一
+# 次失败(2026-11-16 用户反馈"识别不出时按手动一样不给答案"),抬高下限
+# 才读得出不一样的结果;窄带复检靠这个杠杆救回过整行漏读(「长沙马王堆」)
+MANUAL_DET_LIMIT = 1280
 
 
 def _band(x1, y1, x2, y2, band):
@@ -702,9 +708,11 @@ class KejuTool(threading.Thread):
         # 区域接过来,自动跟随不断线)
         boxes = [list(r) for r in (self.cfg("regions") or []) if r]
         self._auto_boxes = boxes or None
-        # 各槽位的无锚点扫描区:画布 × DLG_RATIOS(隔壁定稿比例,见
-        # _sync_scan_rects);空槽位/没同步到的拍退回整窗比例带
+        # 各槽位的扫描区:画布 × 比例表(见 _sync_scan_rects)——
+        # _scan_rects 是无锚点族的底部对话带(DLG_RATIOS),_exam_rects 是
+        # 科举答题的答题面板(EXAM_RATIOS);空槽位/没同步到的拍退回整窗
         self._scan_rects: list = []
+        self._exam_rects: list = []
         self._client_names: list = []   # 各槽位的角色名(抠自窗口标题,见 set_auto_boxes)
         # 分辨率不支持而暂停观测的角色(界面红名显示;改回支持档自动恢复)
         self._unsup: list = []
@@ -782,32 +790,33 @@ class KejuTool(threading.Thread):
                               )[:core.MAX_CLIENTS]
 
     def _sync_scan_rects(self, found):
-        """各槽位的无锚点扫描区:画布 × DLG_RATIOS(隔壁降妖伏魔的定稿比例表)。
+        """各槽位的扫描区:画布 × 比例表(两族各一张,真机画框定稿)。
 
         found 是跟随周期枚举出的支持客户端 (标题, 窗口矩形) 列表,按窗口
-        矩形对回槽位。对话框是**固定像素大小**的游戏 UI,贴在画布哪里按
-        游戏设置分辨率查表(640×480/800×600/1024×768 一档一套,真机画框
-        定稿)—— 比"整窗 × PLAIN_BAND"紧得多,任务追踪栏/NPC 名牌/聊天
-        从源头就进不来(2026-11-15 车迟斗法实测:HUD 短行曾凑成"当屏选项"
-        把题库正确答案误压,几何过滤只是补救,这个才是根治)。拿不到画布
-        的槽位置 None,cycle 那拍退回整窗比例带 —— 正常到不了:槽位本身
-        就是配到画布的支持客户端。
+        矩形对回槽位。无锚点族(三大学士/副本答题)只扫底部对话带
+        (`dialog_rect` = DLG_RATIOS),科举答题只扫居中的答题面板
+        (`exam_rect` = EXAM_RATIOS)—— 面板是**固定像素大小**的游戏 UI,
+        贴在哪按游戏设置分辨率查表(640×480/800×600/1024×768 一档一套),
+        比整窗紧得多,任务追踪栏/NPC 名牌/聊天从源头就进不来(2026-11-15
+        车迟斗法实测:HUD 短行曾凑成"当屏选项"把题库正确答案误压,几何
+        过滤只是补救,这个才是根治)。拿不到画布/该档没量到的槽位置 None,
+        cycle 那拍退回整窗 —— 正常到不了:槽位本身配到了画布的支持客户端。
         """
         import core
         rects = [None] * core.MAX_CLIENTS
+        exams = [None] * core.MAX_CLIENTS
         for t, b in found[:core.MAX_CLIENTS]:
             canvas = core.client_canvas(b, t)
             if canvas is None:
-                continue
-            rect = core.dialog_rect(canvas[0], canvas[1])
-            if rect is None:
                 continue
             try:
                 i = self._auto_boxes.index([int(v) for v in b])
             except (ValueError, AttributeError):
                 continue
-            rects[i] = rect
+            rects[i] = core.dialog_rect(canvas[0], canvas[1])
+            exams[i] = core.exam_rect(canvas[0], canvas[1])
         self._scan_rects = rects
+        self._exam_rects = exams
 
     # ---- 自己的配置 ----
     def cfg(self, key, default=None):
@@ -1118,7 +1127,7 @@ class KejuTool(threading.Thread):
             pass
 
     def _parse_keju(self, rblocks):
-        """【科举会试/殿试】必须存在"御前科举大赛…题目:"结构锚点。
+        """【科举答题】必须存在"御前科举大赛…题目:"结构锚点。
 
         找到 -> 剥头取裸题干,返回 (裸题干, 题干块下标集合);
         找不到 -> 返回 None(当前区域不是该界面的题,跳过)。
@@ -1130,7 +1139,7 @@ class KejuTool(threading.Thread):
         return bare, qwin
 
     def _parse_plain(self, rblocks, require_hit: bool = False):
-        """【无锚点模式:三大学士/金兜兕/车迟斗法】不要锚点:区域内滑窗直接全题干匹配。
+        """【无锚点模式:三大学士/副本答题】不要锚点:区域内滑窗直接全题干匹配。
 
         返回 (题干文本, 题干块下标集合或None)。候选由 cycle 统一走
         `match_all` 全列取回 —— 同一题干常有两个答案变体(官方源如此,
@@ -1184,7 +1193,7 @@ class KejuTool(threading.Thread):
         if force:
             # 手动识别必须有可见结果,沿用既有提示(统计/习惯都认这句)
             olog("读到文字但没认出科举题目:"
-                 f"{text[:60]}…(可切「三大学士/金兜兕/车迟斗法」试试)")
+                 f"{text[:60]}…(可切「三大学士/副本答题」试试)")
             self._show_miss("没认出科举题目(可切无锚点模式试试)",
                             text[:40])
         elif like_q and first:
@@ -1226,7 +1235,7 @@ class KejuTool(threading.Thread):
         found_text = False
         _t_cycle0 = time.time()
         exam_mode = bool(self.cfg("exam_mode", True))
-        mode_name = self.cfg("mode", "") or ("御前科举" if exam_mode
+        mode_name = self.cfg("mode", "") or ("科举答题" if exam_mode
                                              else "三大学士")
         for region in regions:
             x1, y1, x2, y2 = region
@@ -1237,17 +1246,17 @@ class KejuTool(threading.Thread):
             if recheck:
                 self._region_recheck.pop(key, None)
             try:
-                # 无锚点的模式(三大学士/金兜兕/车迟斗法)只扫对话框:
-                # 画布 × DLG_RATIOS(隔壁定稿比例,跟随每拍同步,见
-                # _sync_scan_rects;画布没配到的槽位退回整窗比例带);
-                # 科举三试整窗扫
+                # 只扫答题区域(画布 × 比例表,跟随每拍同步,见
+                # _sync_scan_rects):科举答题 = 答题面板 EXAM_RATIOS,
+                # 无锚点族(三大学士/副本答题)= 底部对话带 DLG_RATIOS。
+                # 画布框没同步到的槽位退回整窗(无锚点族再缩到 PLAIN_BAND)
                 scan = None
-                if not exam_mode:
-                    for i, b in enumerate(self._auto_boxes or []):
-                        if list(region) == list(b):
-                            rects = self._scan_rects or []
-                            scan = rects[i] if i < len(rects) else None
-                            break
+                for i, b in enumerate(self._auto_boxes or []):
+                    if list(region) == list(b):
+                        rects = (self._exam_rects if exam_mode
+                                 else self._scan_rects) or []
+                        scan = rects[i] if i < len(rects) else None
+                        break
                 base = scan or (region if exam_mode
                                 else plain_band(x1, y1, x2, y2))
                 crop = self.screen.grab(base)
@@ -1262,7 +1271,8 @@ class KejuTool(threading.Thread):
                 # 否则下一轮会把刚识别过的同一画面再识别一次
                 continue  # 画面无新内容,跳过OCR
             _t_ocr0 = time.time()
-            rblocks = self.ocr.recognize_blocks(crop)
+            rblocks = self.ocr.recognize_blocks(
+                crop, limit_side=MANUAL_DET_LIMIT if force else None)
             _t_ocr = time.time() - _t_ocr0
             if not rblocks:
                 if self._sticky(key):
@@ -1355,11 +1365,13 @@ class KejuTool(threading.Thread):
                 # 选项哨兵:当屏明明读得出选项,答案却不在其中。用户口径
                 # (2026-11-16):各玩法题目与答案相同,压答基本都是 OCR
                 # 漏检/误读,少数情况是题库答案过期 —— 无论哪种,报一个
-                # 屏上选不出的答案都更糟,宁可不报
+                # 屏上选不出的答案都更糟,宁可不报。只管自动路径;手动
+                # 识别是用户点名要答案,放行但留痕(下面 elif)
                 olines = option_lines(rblocks, qwin)
-                if len(olines) >= 3 and not any(
+                sentinel_hits = len(olines) >= 3 and not any(
                         _opt_hit_strict(core.normalize(entry["a"]), o)
-                        for o in olines):
+                        for o in olines)
+                if sentinel_hits and not force:
                     # 压答前两道第二意见,任一放行就照常播报:
                     # ①窄带复检再读一次 —— OCR 偶发整行漏检选项,漏的常是
                     #   答案那一行(2026-11-15 实测「长沙马王堆」两拍没读出
@@ -1409,6 +1421,14 @@ class KejuTool(threading.Thread):
                                             olines=olines)
                         self._nomatch_streak = 0
                         return  # 本轮此区域已处理
+                elif sentinel_hits:
+                    # 手动识别是用户点名要答案:哨兵不拦(它管的是自动路径
+                    # "宁可不报"),但留痕 —— note 进 match 事件,日志提醒
+                    # 答案可能过期,方便按新答案补题(--uncollected)
+                    note += " [哨兵放行]"
+                    olog(f"答案「{entry['a']}」不在当屏选项"
+                         f"({'/'.join(olines[:4])})里,手动放行 —— "
+                         "若屏上确实没有,这条答案可能已过期")
                 self._remember_answered(entry)
                 self.app.last_question = entry["q"]
                 self.app.last_answer = entry["a"]
@@ -1614,9 +1634,22 @@ class KejuTool(threading.Thread):
                     continue
                 t, b, why = hit
                 if why:
-                    # 不支持档/退出登录:槽位让出不再截图识别(慢、字小);
-                    # 红名已由 _unsup_mark 统一记,这里不重复提示
+                    # 不支持档/退出登录:槽位让出不再截图识别(慢、字小)。
+                    # 被认领的观测槽位改档是**确凿证据** —— 名字当场记红名,
+                    # 不等 _unsup_mark 配画布:切换分辨率那一拍画布经常配
+                    # 不到本尊,等它配到之前名字就丢了(2026-11-16 用户
+                    # 实测:切到不支持档后胶囊直接消失)。退出登录(标题
+                    # 抠不出角色名)照旧静默移除。
                     removed += 1
+                    nm = core.client_name(t) if why == "tier" else ""
+                    if nm and nm not in self._unsup:
+                        self._unsup.append(nm)
+                        canvas = core.client_canvas(b, t)
+                        reason = (f"游戏分辨率 {canvas[1][0]}×{canvas[1][1]}"
+                                  " 不支持" if canvas else
+                                  "游戏画面暂不可读(切换分辨率/加载中)")
+                        self.app.log(f"[客户端]{nm}{reason},已暂停观测"
+                                     "(红名显示,改回支持档自动恢复)")
                 else:
                     bb = [int(v) for v in b]
                     moved = moved or bb != ob

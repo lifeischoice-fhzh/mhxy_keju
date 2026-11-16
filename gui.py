@@ -169,10 +169,6 @@ class App:
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
         self.root.after(POLL_MS, self._drain_logs)
         if self._readonly:
-            try:
-                self.status_dot.set_state(False)    # 红点常亮
-            except Exception:
-                pass
             self.log(f"[应用]{core.HINT_TXT} —— 应用已停用,不能识别与播报")
         else:
             self.log("[应用]就绪 —— 已默认开启自动监听,定位到客户端即开始答题")
@@ -196,11 +192,12 @@ class App:
             pass
 
     def _refresh_mode_menu(self):
-        """下拉面板里把当前模式标出来(✓ + 主题色),其余回普通色。"""
+        """下拉面板里把当前模式标出来:主题色 + 右缘 ✓,字名字对齐不挪位。"""
         for name, btn in getattr(self, "mode_rows", []):
             try:
                 cur = name == self._mode()
-                btn.set_text(("✓ " if cur else "") + name)
+                btn.set_text(name)
+                btn.set_trail("✓" if cur else "")
                 btn.set_palette(ui_keju.mode_row_palette(self.skin, cur))
             except Exception:
                 pass
@@ -272,10 +269,10 @@ class App:
         self._set_mode(core.DEFAULT_MODE if keju else "三大学士")
 
     def _refresh_regions(self):
-        """刷新客户端胶囊(角色名/未定位);引擎还没起来时也安全。"""
+        """刷新客户端胶囊(角色名/状态点/未定位);引擎还没起来时也安全。"""
         regions = ((self._get("regions") or [])
                    + [None] * core.MAX_CLIENTS)
-        names, unsup = [], []
+        names, unsup, watching = [], [], False
         if getattr(self, "engine", None) is not None:
             try:
                 st = self.engine.keju_tool.ui_state()
@@ -283,7 +280,8 @@ class App:
                 unsup = st.get("unsup") or []
             except Exception:
                 names = []
-        ui_keju.refresh_capsules(self, regions, names, unsup)
+            watching = bool(getattr(self.engine.keju_tool, "watching", False))
+        ui_keju.refresh_capsules(self, regions, names, unsup, watching)
 
     def on_toggle_mute(self):
         if getattr(self, "_readonly", False):
@@ -377,7 +375,7 @@ class App:
             self.engine.set_watch(True)   # 自动监听默认开:定位到客户端就(重新)接管
         if not core.mode_exam(self._mode()):
             self.log(f"[提示]「{self._mode()}」没有结构锚点,靠题库比对认题,"
-                     "科举会试/殿试带锚点更稳")
+                     "科举答题带锚点更稳")
 
     def _log_unsupported(self, bad):
         """逐个记一行不支持的客户端(只落日志,不弹框 —— 红名已表达)。
@@ -712,12 +710,6 @@ class App:
             # 停用态:窗口留着只显示提示,引擎相关的整条刷新链都跳过
             self.root.after(POLL_MS, self._drain_logs)
             return
-        # 状态灯:监听中 = 绿点闪烁;未监听/未定位 = 红点常亮
-        try:
-            watching = bool(getattr(self.engine.keju_tool, "watching", False))
-            self.status_dot.set_state(watching)
-        except Exception as e:
-            self._note_broken("状态灯", e)
         # 题目识别区:内容变了才重画(识别线程只摆 last_question/last_answer)
         try:
             qa = (self.last_question or "", self.last_answer or "")
@@ -748,12 +740,13 @@ class App:
                     self._anchor_mini()
         except Exception as e:
             self._note_broken("迷你窗", e)
-        # 区域被引擎自动跟随更新了(或角色名变了)-> 同步胶囊显示
+        # 区域被引擎自动跟随更新了(或角色名/监听状态变了)-> 同步胶囊显示
         try:
             names = self.engine.keju_tool.ui_state().get("names") or []
+            watching = bool(getattr(self.engine.keju_tool, "watching", False))
             sig = (tuple(tuple(r) if r else None
                          for r in (self._get("regions") or [])),
-                   tuple(names))
+                   tuple(names), watching)
             if sig != getattr(self, "_region_sig", None):
                 self._region_sig = sig
                 self._refresh_regions()
@@ -824,7 +817,7 @@ class App:
         self.log(f"[应用]{core.HINT_TXT},已停止识别与播报")
         try:
             ui_keju.draw_readonly(self.hero_canvas, self.skin)
-            self.status_dot.set_state(False)
+            self._refresh_regions()   # 停用态重画胶囊:红点/空态
         except Exception as e:
             self._note_broken("环境预检", e)
 

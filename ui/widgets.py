@@ -154,7 +154,7 @@ def pop_in(win, xy=None, offset=(0, POP_PX), ms=POP_MS, show=True):
     _animate(win, frames, done=done)
 
 
-# ---- 圆角文字按钮 / 监听状态小圆点:ttk 做不了圆角与三态,Canvas 画 ----
+# ---- 圆角文字按钮:ttk 做不了圆角与三态,Canvas 画 ----
 
 def round_pts(x1, y1, x2, y2, r):
     """圆角矩形轮廓点列(create_polygon + smooth=True 一次画圆)。"""
@@ -168,15 +168,20 @@ class TextButton(tk.Canvas):
     """圆角文字按钮:悬停变浅、按下更深,松手还在按钮上才触发回调。
 
     palette 由调用方按当前皮肤给(_btn_pal),本组件不自带配色。
+    trail:贴右缘的小标记(模式下拉用 ✓),正文照常居中 —— 名字不因标记挪位。
+    align:"c" 居中 / "w" 靠左(左内边距 12px,模式钮和下拉行用同一对齐)。
     """
 
     def __init__(self, parent, text, command, palette,
-                 width=88, height=32, radius=9, bg=None):
+                 width=88, height=32, radius=9, bg=None, trail="",
+                 align="c"):
         super().__init__(parent, width=width, height=height,
                          highlightthickness=0,
                          bg=bg if bg is not None else parent["bg"])
         self._text, self._command = text, command
         self._pal = palette
+        self._trail = trail
+        self._align = align
         # 注意:_w/_h 是 tkinter 的控件路径属性,不能挪用,这里叫 _bw/_bh
         self._bw, self._bh, self._br = width, height, radius
         self.bind("<Enter>", lambda _e: self._paint("hover"))
@@ -192,11 +197,20 @@ class TextButton(tk.Canvas):
         self.create_polygon(round_pts(1, 1, self._bw - 1, self._bh - 1,
                                       self._br), smooth=True,
                             fill=pal[key], outline="")
-        tid = self.create_text(self._bw / 2, self._bh / 2, text=self._text,
-                               font=pal["font"], fill=pal["fg"], anchor="c")
-        bb = self.bbox(tid)
-        if bb:
-            self.move(tid, 0, self._bh / 2 - (bb[1] + bb[3]) / 2)
+
+        def mid(item):
+            bb = self.bbox(item)
+            if bb:
+                self.move(item, 0, self._bh / 2 - (bb[1] + bb[3]) / 2)
+
+        tx, anchor = ((12, "w") if self._align == "w"
+                      else (self._bw / 2, "c"))
+        mid(self.create_text(tx, self._bh / 2, text=self._text,
+                             font=pal["font"], fill=pal["fg"], anchor=anchor))
+        if self._trail:
+            mid(self.create_text(self._bw - 10, self._bh / 2,
+                                 text=self._trail, font=pal["font"],
+                                 fill=pal["fg"], anchor="e"))
 
     def _release(self, e):
         inside = 0 <= e.x <= self._bw and 0 <= e.y <= self._bh
@@ -209,6 +223,11 @@ class TextButton(tk.Canvas):
         self._text = text
         self._paint("normal")
 
+    def set_trail(self, trail):
+        """换右缘小标记(模式下拉的 ✓),重画回常态。"""
+        self._trail = trail
+        self._paint("normal")
+
     def set_palette(self, pal):
         """换配色(静音钮用红色系标记静音状态),重画回常态。"""
         self._pal = pal
@@ -218,49 +237,12 @@ class TextButton(tk.Canvas):
         """当前文案(测试与状态判断用)。"""
         return self._text
 
+    def trail(self):
+        """右缘标记文案(空串 = 没有标记)。"""
+        return self._trail
+
     def invoke(self):
         self._command()
 
 
-class StatusDot(tk.Canvas):
-    """监听状态小圆点:监听中 = 绿点呼吸闪烁;未监听 = 红点常亮。"""
-
-    GREEN, GREEN_DIM, RED = "#22c55e", "#9fe8b8", "#e5484d"
-
-    def __init__(self, parent, d=10, bg=None):
-        super().__init__(parent, width=d, height=d, highlightthickness=0,
-                         bg=bg if bg is not None else parent["bg"])
-        self._d, self._aid, self._on = d, None, None
-        self.bind("<Destroy>", lambda _e: self._cancel())
-        self.set_state(False)
-
-    def _cancel(self):
-        if self._aid:
-            try:
-                self.after_cancel(self._aid)
-            except Exception:
-                pass
-            self._aid = None
-
-    def set_state(self, on: bool):
-        """on = 监听中(绿点闪烁);off = 红点常亮。状态没变就不动。"""
-        if on == self._on:
-            return
-        self._on = bool(on)
-        self._cancel()
-        if self._on:
-            self._blink(True)
-        else:
-            self._paint(self.RED)
-
-    def _blink(self, bright):
-        self._paint(self.GREEN if bright else self.GREEN_DIM)
-        self._aid = self.after(500, lambda: self._blink(not bright))
-
-    def _paint(self, color):
-        self.delete("all")
-        self.create_oval(1, 1, self._d - 1, self._d - 1, fill=color,
-                         outline="", tags="dot")
-
-
-DOT_GAP = 1           # 状态灯与文字的间距(px)
+DOT_GAP = 1           # 状态点与文字的间距(px)

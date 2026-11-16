@@ -10,10 +10,10 @@ core.XXX 的既有引用与测试补丁语义不变。顶层不 import core。
 from client_common import (CANVAS_WINDOW_CLASS,  # noqa: F401
                            CLIENT_MIN_H, CLIENT_MIN_W,
                            CLIENT_WINDOW_CLASS, CLIENT_WINDOW_TITLE,
-                           DLG_RATIOS, GAME_RES_STEPS, MIN_GAME_RES,
+                           DLG_RATIOS, EXAM_RATIOS, GAME_RES_STEPS, MIN_GAME_RES,
                            SUPPORTED_RES, TRK_BOXES, box_of, canvas_game_res,
                            client_canvas, client_name, client_size_info,
-                           dialog_rect, draw_box, find_client_canvases,
+                           dialog_rect, draw_box, exam_rect, find_client_canvases,
                            find_client_windows, ratio_of, trk_rect)
 
 

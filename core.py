@@ -44,8 +44,9 @@ from clients import (CLIENT_WINDOW_CLASS,  # noqa: E402, F401
                      CLIENT_WINDOW_TITLE, CLIENT_MIN_W,
                      CLIENT_MIN_H, CANVAS_WINDOW_CLASS,
                      GAME_RES_STEPS, MIN_GAME_RES, SUPPORTED_RES,
-                     DLG_RATIOS, TRK_BOXES, box_of, ratio_of, draw_box,
-                     dialog_rect, trk_rect,
+                     DLG_RATIOS, EXAM_RATIOS, TRK_BOXES,
+                     box_of, ratio_of, draw_box,
+                     dialog_rect, exam_rect, trk_rect,
                      canvas_game_res, find_client_canvases,
                      client_canvas, client_size_info,
                      supported_res_text, client_supported,
@@ -59,18 +60,21 @@ from voice import (ZH_VOICE_KEYS, CLOUD_VOICES, RATE_PCT,  # noqa: E402, F401
 from voice import Speaker  # noqa: E402, F401
 
 # 识别模式:名字 -> 是否用「御前科举」那套逻辑(结构锚点 + 整窗扫描)。
-# 科举会试/殿试是同一个答题对话框的两个阶段,锚点完全一样;
-# 后三个是深色弹窗,没有对话框头,只扫底部对话带、按题干全文匹配。
+# 科举答题 = 旧版御前科举(会试/殿试是同一个答题对话框的两个阶段,锚点一样);
+# 三大学士 / 副本答题是深色弹窗,没有对话框头,只扫底部对话带、按题干全文匹配。
 KEJU_MODES = (
-    ("科举会试", True),
-    ("科举殿试", True),
+    ("科举答题", True),
     ("三大学士", False),
-    ("金兜兕", False),
-    ("车迟斗法", False),
+    ("副本答题", False),
 )
 KEJU_MODE_NAMES = tuple(name for name, _ in KEJU_MODES)
 DEFAULT_MODE = KEJU_MODE_NAMES[0]
 _MODE_EXAM = dict(KEJU_MODES)
+# 旧版 5 个模式名 -> 新名(按识别族收编):会试/殿试=科举答题,金兜兕/车迟斗法=副本答题
+_LEGACY_MODES = {
+    "科举会试": "科举答题", "科举殿试": "科举答题", "御前科举": "科举答题",
+    "金兜兕": "副本答题", "车迟斗法": "副本答题",
+}
 
 
 def mode_exam(name: str) -> bool:
@@ -79,10 +83,12 @@ def mode_exam(name: str) -> bool:
 
 
 def mode_label(name: str) -> str:
-    """事件/老配置里的模式名 -> 规范名(兼容「御前科举」和「普通」两种老叫法)。"""
+    """事件/老配置里的模式名 -> 规范名(兼容旧版 5 模式和「普通」等老叫法)。"""
     name = (name or "").strip()
     if name in _MODE_EXAM:
         return name
+    if name in _LEGACY_MODES:
+        return _LEGACY_MODES[name]
     if "三大" in name or name == "普通":
         return "三大学士"
     return DEFAULT_MODE
@@ -254,10 +260,14 @@ def load_config() -> dict:
             for name, part in saved.items():     # 逐分区合并,默认值不丢
                 cfg[name].update(part)
             # 老配置只有 exam_mode 布尔:按它迁移出模式名。不做这步的话,
-            # 默认值里的「科举会试」会把用着三大学士的人悄悄改回科举族。
+            # 默认值里的「科举答题」会把用着三大学士的人悄悄改回科举族。
             if "mode" not in raw:
                 cfg["keju"]["mode"] = (DEFAULT_MODE if raw.get("exam_mode", True)
                                        else "三大学士")
+            else:
+                # 旧版 5 个模式名:按识别族收编成新名(科举会试/殿试=科举答题,
+                # 金兜兕/车迟斗法=副本答题)
+                cfg["keju"]["mode"] = mode_label(cfg["keju"].get("mode"))
         except Exception:
             pass
     keju = keju_cfg(cfg)

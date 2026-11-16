@@ -510,7 +510,7 @@ def cmd_stats(since: str = "") -> int:
     for ev in events:
         kind, ts = ev["kind"], ev["ts"]
         if kind == "mode":
-            # 兼容老叫法:普通/三大学士是同一模式;「御前科举」归到默认档
+            # 兼容老叫法:旧版 5 个模式名按族收编成新名(见 core.mode_label)
             mode = core.mode_label(ev.get("mode", ""))
             cur = new_seg(ts)
             continue

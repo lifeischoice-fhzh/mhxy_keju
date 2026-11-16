@@ -5,7 +5,7 @@
 import core  # 间隔区间(MIN/MAX_INTERVAL)取自地基
 from tkinter import font as tkfont
 from ui import widgets as ui_widgets
-from ui.widgets import StatusDot, TextButton, round_pts
+from ui.widgets import TextButton, round_pts
 
 # ---- 迷你置顶窗 ----
 MINI_FONT, MINI_FONT_MIN = 22, 11   # 默认字号 / 超长答案缩到的下限
@@ -13,23 +13,27 @@ MINI_LABEL_MAX_W = 430              # 文案超过这个宽度就逐步缩字号
 MINI_MARGIN, MINI_TOP = 24, 36      # 默认停靠:屏幕右上角,留边距
 
 # ---- 主窗:左竖排角色名 + 右上操作钮 + 题目识别区 ----
-WIN_W, WIN_H = 664, 232
+WIN_W = 664
 SIDE_W = 170                        # 左栏宽
 BOX_W, BOX_H = 146, 30              # 角色名框
+CAP_GAP = 6                         # 胶囊行距(每格 = 胶囊 + 行距)
+CAP_PAD = 6                         # 胶囊列顶部留白(底部由末格行距充当)
+# 整窗高 = 直接预留 5 格角色名的高度 + 上下留白,与左栏等高
+WIN_H = core.MAX_CLIENTS * (BOX_H + CAP_GAP) + CAP_PAD
 BTN_W, BTN_H = 110, 36            # 右上操作钮:等宽大钮,4 颗正好铺满右区
 MAIN_X = 182                        # 右区起始 x(左栏 170 + 12 间距)
-MODE_MENU_X, MODE_MENU_Y = MAIN_X, 50
-MODE_MENU_W = 160                   # 模式下拉面板:压在题目卡左上角
-MODE_ROW_H, MODE_ROW_GAP = 28, 2
-MODE_MENU_PAD = 6
+MODE_MENU_PAD = 4                   # 面板内边距:行与面板边之间
+MODE_MENU_X, MODE_MENU_Y = MAIN_X - MODE_MENU_PAD, 50   # 行与按钮左右对齐
+MODE_MENU_W = BTN_W + 2 * MODE_MENU_PAD   # 行宽 = 原模式钮宽,面板只多一圈边
+MODE_ROW_H, MODE_ROW_GAP = BTN_H, 2   # 下拉行:高宽与模式钮一致,整面板收进窗高里
 MODE_MENU_H = (MODE_MENU_PAD * 2
                + len(core.KEJU_MODES) * (MODE_ROW_H + MODE_ROW_GAP)
                - MODE_ROW_GAP)
-MODE_HINT = "点上方模式按钮可切换模式"
 YH = "Microsoft YaHei UI"
 Q_FONT = (YH, 13)
 A_FONT = (YH, 36, "bold")
 UNSUP_RED = "#e0554d"               # 分辨率不支持暂停观测的角色名(红)
+DOT_ON, DOT_OFF = "#22c55e", "#e5484d"   # 胶囊状态点:观测中绿 / 暂停观测红
 
 # ---- 双皮肤:M1 玄夜(深)/ M4 玄白(浅),换肤按钮一键切换 ----
 SKINS = {
@@ -272,7 +276,8 @@ def build(app, skin="dark"):
     for i in range(core.MAX_CLIENTS):
         cv = tk.Canvas(side, width=BOX_W, height=BOX_H,
                        highlightthickness=0, bg=th["panel"])
-        cv.grid(row=i, column=0, padx=(12, 12), pady=(12 if i == 0 else 0, 6))
+        cv.grid(row=i, column=0, padx=(12, 12),
+                pady=((CAP_PAD, CAP_GAP) if i == 0 else (0, CAP_GAP)))
         app.client_capsules.append(cv)
     # 左栏空态占位:没定位到客户端时显示(见 refresh_capsules / draw_side_ph)
     app.side_ph = tk.Canvas(side, width=BOX_W, height=150,
@@ -285,7 +290,7 @@ def build(app, skin="dark"):
     pal_g = _btn_pal(th["ghost"], 11)
     app.mode_btn = TextButton(app.root, "模式", app.on_toggle_mode,
                               palette=pal_p, width=BTN_W, height=BTN_H,
-                              radius=th["btn_r"])
+                              radius=th["btn_r"], align="w")
     app.manual_btn = TextButton(app.root, "手动识别", app.on_manual_scan,
                                 palette=pal_g, width=BTN_W, height=BTN_H,
                                 radius=th["btn_r"])
@@ -308,19 +313,13 @@ def build(app, skin="dark"):
                                 height=WIN_H - 12 - 52, bg=th["bg"],
                                 highlightthickness=0)
     app.hero_canvas.place(x=MAIN_X, y=52)
-    # 状态灯:监听中绿点闪烁 / 未监听红点常亮(叠在题目卡右上角)
-    app.status_dot = StatusDot(app.root, d=10, bg=th["card"])
-    app.status_dot.place(x=WIN_W - 28, y=62)
     # 换肤:玄夜 / 玄白 一键切换(选择记进配置,下次启动沿用)
     app.skin_btn = TextButton(
         app.root, "换肤", app.on_toggle_skin,
         palette=_btn_pal(th["ghost"], 9), width=52, height=22,
         radius=7, bg=th["card"])
-    app.skin_btn.place(x=572, y=58)
+    app.skin_btn.place(x=WIN_W - 12 - 52 - 6, y=58)   # 题目卡右上角
     draw_hero(app.hero_canvas, "", "", skin)
-    # 题目卡左上角的引导:点一下也能直接开模式下拉
-    app.hero_canvas.tag_bind("mode_hint", "<Button-1>",
-                             lambda _e: app.on_toggle_mode())
     build_mode_menu(app, skin)
     app._refresh_mode_btn()
     app._refresh_mode_menu()
@@ -343,7 +342,7 @@ def build_mode_menu(app, skin):
             inner, name, lambda n=name: app.on_pick_mode(n),
             palette=mode_row_palette(skin, False),
             width=MODE_MENU_W - 2 * MODE_MENU_PAD, height=MODE_ROW_H,
-            radius=th["row_r"], bg=th["card"])
+            radius=th["btn_r"], bg=th["card"], align="w")
         btn.place(x=MODE_MENU_PAD,
                   y=MODE_MENU_PAD + i * (MODE_ROW_H + MODE_ROW_GAP))
         app.mode_rows.append((name, btn))
@@ -372,11 +371,8 @@ def draw_hero(cv, question, answer, skin="dark"):
     w, h = int(cv["width"]), int(cv["height"])
     cv.create_polygon(round_pts(1, 1, w - 1, h - 1, th["card_r"]), smooth=True,
                       fill=th["card"], outline=th["line"], width=1)
-    # 模式引导常驻:很多用户不知道右上那颗钮是能点的
-    cv.create_text(24, 15, text=MODE_HINT, font=(YH, 9), fill=th["sub"],
-                   anchor="w", tags="mode_hint")
     if not question and not answer:
-        cx, gy = w / 2, h / 2 - 60
+        cx, gy = w / 2, h / 2 - 48
         cv.create_polygon(round_pts(cx - 21, gy, cx + 21, gy + 54, 6),
                           smooth=True, fill=th["ph_doc"],
                           outline=th["ph_line"], width=1)
@@ -390,11 +386,11 @@ def draw_hero(cv, question, answer, skin="dark"):
                        font=(YH, 9), fill=th["ph_sub"], tags="ph")
         return
     q = fit_text(question, Q_FONT, w - 48)
-    cv.create_text(24, 42, text=q, font=Q_FONT, fill=th["sub"], anchor="w",
+    cv.create_text(24, 30, text=q, font=Q_FONT, fill=th["sub"], anchor="w",
                    tags="q")
     a = fit_text(answer or "—", A_FONT, w - 48)
-    cv.create_text(24, 96, text=a, font=A_FONT, fill=th["answer"],
-                   anchor="w", tags="a")
+    cv.create_text(24, min(84, h - 38), text=a, font=A_FONT,
+                   fill=th["answer"], anchor="w", tags="a")
 
 
 def draw_readonly(cv, skin="dark"):
@@ -483,11 +479,13 @@ def _fit_name(name, max_units=12):
     return "".join(out)
 
 
-def _draw_capsule(cv, i, name, th, bad=False):
+def _draw_capsule(cv, i, name, th, bad=False, watching=True):
     """重画第 i 个角色名框(只画已定位的):名字按显示宽截 6 个汉字,无按钮。
 
     多边形内缩 1px:贴边画的描边下半像素会被画布裁掉(下边框消失);
     文字按 bbox 实测垂直居中 —— 中文字形在行框里偏上,固定偏移猜不准。
+    右端一颗状态点:正常观测亮绿灯;暂停观测(分辨率不支持)/没在监听
+    亮红灯。
     bad=True:分辨率不支持暂停观测的角色,名字画红。
     """
     w, h = int(cv["width"]), int(cv["height"])
@@ -504,15 +502,15 @@ def _draw_capsule(cv, i, name, th, bad=False):
     _vcenter(cv.create_text(12, h // 2, text=label, font=(YH, 10),
                             fill=UNSUP_RED if bad else th["name"],
                             tags="name", anchor="w"))
+    cv.create_oval(w - 21, h / 2 - 4, w - 13, h / 2 + 4,
+                   fill=DOT_OFF if (bad or not watching) else DOT_ON,
+                   outline="", tags="dot")
 
 
 def draw_side_ph(cv, th):
-    """左栏空态占位:没定位到客户端时,画文档图形 + 提示文字。"""
+    """左栏空态占位:没定位到客户端时,画文档图形 + 提示文字(无边框)。"""
     cv.delete("all")
     w = int(cv["width"])
-    cv.create_polygon(round_pts(1, 1, w - 1, int(cv["height"]) - 1, 10),
-                      smooth=True, fill=th["ph_doc"], outline=th["ph_line"],
-                      width=1)
     cx = w / 2
     cv.create_polygon(round_pts(cx - 14, 18, cx + 14, 54, 5), smooth=True,
                       fill=th["card"], outline=th["ph_line"], width=1)
@@ -525,12 +523,13 @@ def draw_side_ph(cv, th):
                    fill=th["ph_sub"], tags="ph")
 
 
-def refresh_capsules(app, regions, names, unsup=None):
+def refresh_capsules(app, regions, names, unsup=None, watching=True):
     """App 调:定位到几个客户端就画几个名字框(最多 MAX_CLIENTS)。
 
     一个都没有时名字框全藏,显示左栏占位图。区域列表在跟随/自动定位
     后始终是"非空前缀",所以数量 = 非空个数;分辨率不支持暂停观测的
-    客户端没有区域,名字排在已定位的后面,一样占一格(红名)。
+    客户端没有区域,名字排在已定位的后面,一样占一格(红名+红点;
+    没在监听的一律红点,监听中的绿点)。
     只画不改状态。
     """
     th = SKINS[getattr(app, "skin", "dark")]
@@ -557,7 +556,7 @@ def refresh_capsules(app, regions, names, unsup=None):
             continue
         cv.grid()
         name = names[i] if i < len(names) else None
-        _draw_capsule(cv, i, name, th, bad=name in unsup)
+        _draw_capsule(cv, i, name, th, bad=name in unsup, watching=watching)
         # 悬停角色名框 = 浮出该角色的游戏画面分辨率(行为在 app.on_client_hover_*)
         cv.bind("<Enter>", lambda _e, i=i: app.on_client_hover_start(i))
         cv.bind("<Leave>", lambda _e, i=i: app.on_client_hover_end(i))
