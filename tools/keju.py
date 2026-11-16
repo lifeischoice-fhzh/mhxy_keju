@@ -1066,6 +1066,36 @@ class KejuTool(threading.Thread):
                 lines.append(t)
         return lines
 
+    def _store_second_opinion(self, entry, olines):
+        """压答前的第二意见:选项仓库里这道题的历史选项 vs 当屏读数。
+
+        只采信"历史选项里当初就有题库答案"的条目 —— 那是播报路径存的
+        (答案在场才学得进);压答路径存的历史选项里没有答案,拿它印证
+        等于放大过期答案(用户口径 2026-11-16:各玩法题目与答案相同,
+        压答基本都是 OCR 漏检,答案必在屏上)。历史选项与当屏对上 >=2
+        条才认:屏幕就是这道题,首轮只是漏检,放行播报。全程吞异常:
+        印证是副产品,任何失败都按没有第二意见处理(压答照旧)。
+        返回印证说明(进日志)或 None。
+        """
+        import core
+        try:
+            e = (getattr(self.options, "entries", None)
+                 or {}).get(entry["n"]) or {}
+            sopts = e.get("options") or []
+            if not sopts or not any(
+                    _opt_hit_strict(core.normalize(entry["a"]), s)
+                    for s in sopts):
+                return None
+            hits = sum(1 for s in sopts
+                       if any(_opt_hit_strict(core.normalize(s), o)
+                              for o in olines))
+            if hits < 2:
+                return None
+            return (f"选项仓库:历史选项与当屏对上({hits}/{len(sopts)}),"
+                    "首轮漏检,照常播报")
+        except Exception:
+            return None
+
     def _learn_options(self, entry, rblocks, qwin, mode_name, olines=None):
         """答题成功后把当屏选项回写选项仓库(data/keju_options.json)。
 
@@ -1322,18 +1352,21 @@ class KejuTool(threading.Thread):
                                  f"{entry['q'][:16]}…")
                     record_event("dup")
                     continue
-                # 选项哨兵:当屏明明读得出选项,答案却不在其中 —— 题库
-                # 这条对当前玩法不适用(同题干在不同活动答案不同,签到池
-                # 带入的变体最典型)。报出来玩家按选项根本没法选,宁可不
-                # 报(2026-11-12 车迟斗法实测:仓库整理题库存的是 200,
-                # 当屏选项 20/30/0/50)
+                # 选项哨兵:当屏明明读得出选项,答案却不在其中。用户口径
+                # (2026-11-16):各玩法题目与答案相同,压答基本都是 OCR
+                # 漏检/误读,少数情况是题库答案过期 —— 无论哪种,报一个
+                # 屏上选不出的答案都更糟,宁可不报
                 olines = option_lines(rblocks, qwin)
                 if len(olines) >= 3 and not any(
                         _opt_hit_strict(core.normalize(entry["a"]), o)
                         for o in olines):
-                    # 压答前窄带复检一遍:OCR 偶发整行漏检选项,漏的常是
-                    # 答案那一行(2026-11-15 实测「长沙马王堆」两拍没读出
-                    # 被压)。重读到就照常播报,仍不在才真的压
+                    # 压答前两道第二意见,任一放行就照常播报:
+                    # ①窄带复检再读一次 —— OCR 偶发整行漏检选项,漏的常是
+                    #   答案那一行(2026-11-15 实测「长沙马王堆」两拍没读出
+                    #   被压),重读分辨率更高;
+                    # ②选项仓库第二意见 —— 这道题答过、历史选项里当初就有
+                    #   题库答案(播报路径才存得进),历史与当屏对上 >=2 条
+                    #   即认定屏幕就是这道题,首轮只是漏检(场景 A)
                     rlines = None
                     qs = [rblocks[i] for i in set(qwin or [])
                           if 0 <= i < len(rblocks)]
@@ -1343,18 +1376,31 @@ class KejuTool(threading.Thread):
                                 max(b["x2"] for b in qs),
                                 max(b["y2"] for b in qs))
                         rlines = self._rescan_olines(base, qbox)
+                    confirm = ""
                     if rlines and any(
                             _opt_hit_strict(core.normalize(entry["a"]), o)
                             for o in rlines):
-                        olog(f"复检读到「{entry['a']}」就在选项里"
-                             "(首轮整行漏读),照常播报")
+                        confirm = (f"复检读到「{entry['a']}」就在选项里"
+                                   "(首轮整行漏读),照常播报")
                         note += " [选项复检]"
+                    if not confirm:
+                        confirm = self._store_second_opinion(entry, olines)
+                        if confirm:
+                            note += " [仓库印证]"
+                    if confirm:
+                        if rlines:
+                            olines += [o for o in rlines if o not in olines]
+                        olog(confirm)
                     else:
                         if rlines:
                             olines += [o for o in rlines if o not in olines]
+                        # 压答也要上卡(界面没有日志框):题目卡换成这道题
+                        # +「选项不符」,别让玩家对着上一题的旧答案等动静
+                        self.app.last_question = entry["q"]
+                        self.app.last_answer = "选项不符,已压"
                         olog(f"答案「{entry['a']}」不在当屏选项"
-                             f"({'/'.join(olines[:4])})里 —— 疑似该答案属于"
-                             "别的玩法,未播报")
+                             f"({'/'.join(olines[:4])})里 —— 疑似 OCR 漏检"
+                             "或题库答案过期,未播报")
                         record_event("suppressed", answer=entry["a"],
                                      options="/".join(olines[:4])[:60])
                         # 压答路径直接用哨兵读到的选项行入库:答案门槛在这条

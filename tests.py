@@ -735,6 +735,50 @@ def sec_options():
         check("哨兵:复检仍读不到答案 -> 照旧压答",
               not app5.said and any("未播报" in m for m in app5.logs),
               f"said={app5.said} logs={app5.logs[-2:]}")
+        check("哨兵:压答上卡(题目+已压,不再挂着上一题)",
+              app5.last_question == "仓库全部整理消耗多少体力"
+              and app5.last_answer == "选项不符,已压",
+              f"q={app5.last_question!r} a={app5.last_answer!r}")
+
+        # 仓库第二意见(场景 A,2026-11-16 接):这道题答过、历史选项里
+        # 当初有题库答案(播报路径才存得进),当屏读数与历史对上 >=2 条
+        # → 屏幕就是这道题,首轮只是漏检,放行播报(note 带 [仓库印证])
+        sobank = make_bank(os.path.join(sb.dir, "so_bank.json"), [
+            {"q": "玩家勾选了若干仓库后点击全部整理消耗多少体力",
+             "a": "甲乙丙丁"}])
+        so_blocks = [blk("玩家勾选了若干仓库后点击全部整理消耗多少体力", 100, 200),
+                     blk("甲乙戊己", 100, 240), blk("戊己庚辛", 100, 270),
+                     blk("壬癸子丑", 100, 300), blk("寅卯辰巳", 100, 330)]
+        sonorm = normalize("玩家勾选了若干仓库后点击全部整理消耗多少体力")
+        store = OptionsStore(os.path.join(sb.dir, "so_store.json"))
+        store.learn(sonorm, "玩家勾选了若干仓库后…", "甲乙丙丁",
+                    options=["甲乙丙丁", "戊己庚辛", "壬癸子丑", "寅卯辰巳"])
+        store.save()
+        eng7, app7 = mk_engine(sobank, [], cfg={"keju": {"exam_mode": False}})
+        eng7.ocr = types.SimpleNamespace(
+            recognize_blocks=lambda img, **kw: list(so_blocks))
+        eng7.keju_tool.options = OptionsStore(
+            os.path.join(sb.dir, "so_store.json"))
+        eng7.keju_tool.keju_cycle(True)
+        check("哨兵:仓库第二意见(历史选项与当屏一致)-> 放行播报",
+              app7.said == ["甲乙丙丁"]
+              and any("仓库印证" in m for m in app7.logs),
+              f"said={app7.said} logs={app7.logs[-2:]}")
+
+        # 历史选项里没有题库答案的条目不采信(那是压答路径存的,印证它会
+        # 放大过期答案)→ 照旧压答
+        eng8, app8 = mk_engine(sobank, [], cfg={"keju": {"exam_mode": False}})
+        eng8.ocr = types.SimpleNamespace(
+            recognize_blocks=lambda img, **kw: list(so_blocks))
+        store8 = OptionsStore(os.path.join(sb.dir, "so_store8.json"))
+        store8.learn(sonorm, "玩家勾选了若干仓库后…", "甲乙丙丁",
+                     options=["一二三四", "五六七八", "九十百千", "子丑寅卯"])
+        store8.save()
+        eng8.keju_tool.options = store8
+        eng8.keju_tool.keju_cycle(True)
+        check("哨兵:历史选项里没有答案的条目不采信 -> 照旧压答",
+              not app8.said and any("未播报" in m for m in app8.logs),
+              f"said={app8.said} logs={app8.logs[-2:]}")
 
         # 无锚点模式的扫描区 = 画布 × DLG_RATIOS(2026-11-15 接隔壁降妖伏魔
         # 的定稿比例表):跟随每拍同步各槽位,识别按它截;没同步到的拍退回
